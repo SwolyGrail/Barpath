@@ -526,7 +526,7 @@
   /* ---------- motivational quotes ---------- */
   var QUOTES = [
     "The bar doesn't care how you feel. Pick it up.",
-    "Train hard. Recover harder.",
+    "Attack the bar. Own the path.",
     "Discipline is choosing what you want most over what you want now.",
     "You don't find willpower. You build it.",
     "Small lifts, stacked daily, become a strong life.",
@@ -539,10 +539,34 @@
     "Consistency beats intensity that doesn't return."
   ];
 
+  /* ---------- alternatives for the main lifts (name -> 2 swaps) ---------- */
+  var ALTERNATIVES = {
+    "Bench Press": [
+      { name: "Dumbbell Bench Press", muscle: "chest" },
+      { name: "Weighted Dip", muscle: "chest" }
+    ],
+    "Back Squat": [
+      { name: "Front Squat", muscle: "quads" },
+      { name: "Leg Press", muscle: "quads" }
+    ],
+    "Deadlift": [
+      { name: "Trap-Bar Deadlift", muscle: "hamstrings" },
+      { name: "Romanian Deadlift", muscle: "hamstrings" }
+    ],
+    "Overhead Press": [
+      { name: "Seated Dumbbell Press", muscle: "shoulders" },
+      { name: "Push Press", muscle: "shoulders" }
+    ],
+    "Weighted Pull-Ups": [
+      { name: "Lat Pulldown", muscle: "back" },
+      { name: "Chin-Ups", muscle: "back" }
+    ]
+  };
+
   global.BARPATH_DATA = {
     GOALS: GOALS, GOAL_ORDER: GOAL_ORDER, PROGRAMS: PROGRAMS,
     WEEKDAYS: WEEKDAYS, PHASES: PHASES, EXP_LEVELS: EXP_LEVELS,
     PR_LIFTS: PR_LIFTS, XP: XP, LEVEL_TITLES: LEVEL_TITLES, xpToReach: xpToReach,
-    BADGES: BADGES, CHALLENGES: CHALLENGES, QUOTES: QUOTES
+    BADGES: BADGES, CHALLENGES: CHALLENGES, QUOTES: QUOTES, ALTERNATIVES: ALTERNATIVES
   };
 })(window);

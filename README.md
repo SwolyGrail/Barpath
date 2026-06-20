@@ -1,6 +1,6 @@
 # Barpath
 
-**Train Hard. Recover Harder.**
+**Attack the Bar. Own the Path.**
 
 Barpath is a premium, installable workout tracker that runs entirely in your browser — no account, no backend, no internet required after the first load. All your data lives on your device.
 

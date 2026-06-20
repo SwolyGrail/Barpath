@@ -246,6 +246,8 @@ label.fldlbl { font-size: var(--f-tiny); color: var(--muted); text-transform: up
 /* week schedule ---------------------------------------------- */
 .weekrow { display: grid; grid-template-columns: repeat(7,1fr); gap: 6px; }
 .daycell { text-align: center; border-radius: var(--r-sm); padding: 8px 2px; background: var(--surface-2); border: 1px solid var(--line); }
+button.daycell { cursor: pointer; font: inherit; color: inherit; display: block; }
+button.daycell:active { transform: scale(.95); }
 .daycell .dow { font-size: 10px; color: var(--muted); }
 .daycell .dotwrap { height: 22px; display: grid; place-items: center; margin-top: 3px; }
 .daycell.train { border-color: rgba(47,123,255,.25); }
@@ -392,10 +394,10 @@ label.fldlbl { font-size: var(--f-tiny); color: var(--muted); text-transform: up
   bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 16px); width: calc(100% - 32px); max-width: 420px;
   background: var(--surface-2); border: 1px solid var(--line-strong); border-radius: var(--r-xl);
   padding: var(--s5); z-index: 60; box-shadow: 0 20px 60px -10px rgba(0,0,0,.8);
-  transition: transform .35s var(--ease);
-  pointer-events: none;
+  transition: transform .35s var(--ease), opacity .25s var(--ease), visibility .35s;
+  pointer-events: none; opacity: 0; visibility: hidden;
 }
-.timer-panel.up { transform: translateX(-50%) translateY(0); pointer-events: auto; }
+.timer-panel.up { transform: translateX(-50%) translateY(0); pointer-events: auto; opacity: 1; visibility: visible; }
 .timer-ring { position: relative; width: 150px; height: 150px; margin: 0 auto var(--s3); }
 .timer-ring .t { position: absolute; inset: 0; display: grid; place-items: center; font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .timer-presets { display: flex; gap: var(--s2); justify-content: center; margin-bottom: var(--s3); }
@@ -464,11 +466,59 @@ label.fldlbl { font-size: var(--f-tiny); color: var(--muted); text-transform: up
 .acc-inner ul { margin: 8px 0; padding-left: 18px; }
 .acc-inner li { margin: 4px 0; }
 
-.pr-row { display: flex; align-items: center; justify-content: space-between; padding: var(--s3) 0; border-bottom: 1px solid var(--line); }
-.pr-row:last-child { border-bottom: none; }
-.pr-row .prname { font-weight: 600; }
+.pr-row { display: flex; align-items: center; justify-content: space-between; padding: var(--s3) 0; border-bottom: 1px solid var(--line); width: 100%; background: none; text-align: left; }
+.pr-row:last-of-type { border-bottom: none; }
+button.pr-row { cursor: pointer; }
+button.pr-row:active { opacity: .7; }
+.pr-row .prname { font-weight: 600; flex: 1 1 auto; }
 .pr-row .prval { font-weight: 800; font-size: var(--f-h2); }
 .pr-row .prval.empty-v { color: var(--faint); font-size: var(--f-small); font-weight: 600; }
+.pr-row .pr-spark { display: inline-flex; align-items: center; margin: 0 12px; opacity: .9; }
+.spark { display: block; }
+/* last-time reference inside an exercise */
+.ex-last { font-size: var(--f-small); color: var(--muted); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 7px 10px; margin-bottom: 10px; }
+.ex-last b { color: var(--text); font-weight: 700; }
+/* recent workouts list */
+.hist-row { display: flex; align-items: center; justify-content: space-between; padding: var(--s3) 0; border-bottom: 1px solid var(--line); }
+.hist-row:last-child { border-bottom: none; }
+button.hist-row { width: 100%; background: none; text-align: left; cursor: pointer; font: inherit; color: inherit; }
+button.hist-row:active { opacity: .65; }
+.hist-row .hist-day { font-weight: 600; }
+.hist-row .hist-tag { font-size: var(--f-tiny); color: var(--accent-2); text-transform: uppercase; letter-spacing: .05em; margin-left: 6px; }
+:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; border-radius: 4px; }
+.edit-row { display: flex; align-items: center; gap: 6px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.edit-row:last-child { border-bottom: none; }
+.edit-row .grow { flex: 1 1 auto; min-width: 0; }
+.iconbtn.xs { width: 34px; height: 34px; flex: 0 0 auto; border-radius: var(--r-sm); display: inline-grid; place-items: center; font-size: 13px; padding: 0; background: var(--surface-2); border: 1px solid var(--line); color: var(--text); }
+.iconbtn.xs[disabled] { opacity: .3; }
+.iconbtn.xs.danger { color: var(--danger, #ff4d57); }
+.iconbtn.xs:active { transform: scale(.92); }
+/* onboarding PR inputs */
+.pr-input { display: flex; align-items: center; gap: var(--s3); padding: 7px 0; border-bottom: 1px solid var(--line); }
+.pr-input:last-child { border-bottom: none; }
+.pr-input .prname { flex: 1 1 auto; font-weight: 600; }
+.pr-input input.fld { width: 110px; flex: 0 0 auto; margin: 0; text-align: center; }
+/* select field */
+select.fld { width: 100%; appearance: none; -webkit-appearance: none; background-image: none; }
+/* achievements highlight */
+.progress-hl .hl-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: var(--s3); align-items: center; }
+.progress-hl .hl-badge { width: 34px; height: 34px; border-radius: var(--r-pill); background: var(--surface-2); border: 1px solid var(--line); display: grid; place-items: center; font-size: 18px; }
+/* home strength chart */
+.progress-chart { cursor: default; }
+.chart-lifts { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 4px; }
+.chart-lifts .chip { cursor: pointer; }
+.chart-tap { display: block; width: 100%; background: none; border: 0; padding: 8px 0 0; margin: 0; cursor: pointer; text-align: left; color: inherit; font: inherit; }
+.chart-tap:active { opacity: .8; }
+.linechart { display: block; overflow: visible; }
+.chart-empty { font-size: var(--f-small); padding: 18px 4px 6px; text-align: center; }
+/* future-day preview banner */
+.preview-banner { margin-top: 14px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-md); padding: 9px 12px; font-size: var(--f-small); color: var(--accent-2); font-weight: 600; }
+/* settings toggle */
+.setting-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
+.toggle { width: 46px; height: 28px; border-radius: var(--r-pill); background: var(--surface-3, #2a2f3a); border: 1px solid var(--line); position: relative; flex: 0 0 auto; transition: background .2s var(--ease); }
+.toggle .knob { position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; border-radius: 50%; background: #fff; transition: transform .2s var(--ease); }
+.toggle.on { background: var(--grad); border-color: transparent; }
+.toggle.on .knob { transform: translateX(18px); }
 
 .flexbtns { display: flex; gap: var(--s2); }
 .flexbtns .btn { flex: 1; }
