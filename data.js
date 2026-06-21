@@ -574,10 +574,56 @@
     ]
   };
 
+  var EXERCISE_LIBRARY = [
+    { name: "Barbell Bench Press", muscle: "chest", pr: "bench" },
+    { name: "Incline Bench Press", muscle: "chest" },
+    { name: "Dumbbell Bench Press", muscle: "chest" },
+    { name: "Push-Up", muscle: "chest" },
+    { name: "Cable Fly", muscle: "chest" },
+    { name: "Overhead Press", muscle: "shoulders", pr: "ohp" },
+    { name: "Dumbbell Shoulder Press", muscle: "shoulders" },
+    { name: "Lateral Raise", muscle: "shoulders" },
+    { name: "Rear Delt Fly", muscle: "shoulders" },
+    { name: "Face Pull", muscle: "shoulders" },
+    { name: "Back Squat", muscle: "quads", pr: "squat" },
+    { name: "Front Squat", muscle: "quads" },
+    { name: "Leg Press", muscle: "quads" },
+    { name: "Walking Lunge", muscle: "quads" },
+    { name: "Leg Extension", muscle: "quads" },
+    { name: "Deadlift", muscle: "hamstrings", pr: "deadlift" },
+    { name: "Romanian Deadlift", muscle: "hamstrings" },
+    { name: "Leg Curl", muscle: "hamstrings" },
+    { name: "Hip Thrust", muscle: "glutes" },
+    { name: "Pull-Up", muscle: "back", pr: "pullup" },
+    { name: "Chin-Up", muscle: "back" },
+    { name: "Lat Pulldown", muscle: "back" },
+    { name: "Barbell Row", muscle: "back" },
+    { name: "Seated Cable Row", muscle: "back" },
+    { name: "Dumbbell Row", muscle: "back" },
+    { name: "Barbell Curl", muscle: "biceps" },
+    { name: "Dumbbell Curl", muscle: "biceps" },
+    { name: "Hammer Curl", muscle: "biceps" },
+    { name: "Tricep Pushdown", muscle: "triceps" },
+    { name: "Overhead Tricep Extension", muscle: "triceps" },
+    { name: "Close-Grip Bench Press", muscle: "triceps" },
+    { name: "Plank", muscle: "core" },
+    { name: "Hanging Leg Raise", muscle: "core" },
+    { name: "Cable Crunch", muscle: "core" },
+    { name: "Calf Raise", muscle: "calves" },
+    { name: "Shrug", muscle: "traps" },
+    { name: "Farmer Carry", muscle: "fullbody" },
+    { name: "Kettlebell Swing", muscle: "fullbody" },
+    { name: "Run", muscle: "cardio" },
+    { name: "Row (Erg)", muscle: "cardio" },
+    { name: "Stationary Bike", muscle: "cardio" }
+  ];
+  var EXERCISE_MUSCLES = ["chest", "back", "shoulders", "biceps", "triceps", "quads", "hamstrings", "glutes", "calves", "core", "traps", "forearms", "cardio", "fullbody"];
+
   global.BARPATH_DATA = {
     GOALS: GOALS, GOAL_ORDER: GOAL_ORDER, PROGRAMS: PROGRAMS,
     WEEKDAYS: WEEKDAYS, PHASES: PHASES, EXP_LEVELS: EXP_LEVELS,
     PR_LIFTS: PR_LIFTS, XP: XP, LEVEL_TITLES: LEVEL_TITLES, xpToReach: xpToReach,
-    BADGES: BADGES, CHALLENGES: CHALLENGES, QUOTES: QUOTES, ALTERNATIVES: ALTERNATIVES
+    BADGES: BADGES, CHALLENGES: CHALLENGES, QUOTES: QUOTES, ALTERNATIVES: ALTERNATIVES,
+    EXERCISE_LIBRARY: EXERCISE_LIBRARY, EXERCISE_MUSCLES: EXERCISE_MUSCLES
   };
 })(window);

@@ -47,7 +47,8 @@
       xp: 0, badges: {}, streak: 0, lastWorkoutDate: null, freezes: 0,
       history: [], programsTried: {}, prs: {}, steps: {}, stepGoal: 8000,
       progress: {}, claimedChallenges: {}, swaps: {}, unit: "kg", customLifts: [],
-      xpLog: {}, exerciseHistory: {}, autoRest: true, dayMods: {}, tutorialSeen: false
+      xpLog: {}, exerciseHistory: {}, autoRest: true, dayMods: {}, tutorialSeen: false,
+      customPrograms: {}, customExercises: []
     };
   }
   function migrate(s) {
@@ -74,6 +75,8 @@
     if (typeof s.autoRest !== "boolean") s.autoRest = true;
     if (!s.dayMods || typeof s.dayMods !== "object") s.dayMods = {};
     if (typeof s.tutorialSeen !== "boolean") s.tutorialSeen = false;
+    if (!s.customPrograms || typeof s.customPrograms !== "object") s.customPrograms = {};
+    if (!Array.isArray(s.customExercises)) s.customExercises = [];
     // migrate positional slot keys -> stable "b"+index ids (entries + swaps)
     if (!s._sidMigrated) {
       try {
@@ -126,7 +129,18 @@
   /* ============================================================
      program + periodization derivation
      ============================================================ */
-  function programId(p) { return p ? p.goal + "-" + p.days : null; }
+  function programId(p) { if (!p) return null; return p.custom ? "custom-" + p.id : p.goal + "-" + p.days; }
+  function isCustomProg() { return !!(S.activeProgram && S.activeProgram.custom); }
+  function goalName() {
+    if (!S.activeProgram) return "";
+    if (S.activeProgram.custom) { var cp = S.customPrograms[S.activeProgram.id]; return cp ? cp.name : "Custom program"; }
+    return D.GOALS[S.activeProgram.goal].name;
+  }
+  function splitLabel() {
+    var days = activeDays();
+    if (isCustomProg()) return days + "-day custom split";
+    return D.PROGRAMS[S.activeProgram.goal].splitName[days];
+  }
   function activeDays() { return S.activeProgram ? S.activeProgram.days : null; }
   // Custom training weekdays (sorted dow numbers), falling back to the default map.
   function activeWeekdays() {
@@ -136,6 +150,7 @@
   }
   function activeProgramObj() {
     if (!S.activeProgram) return null;
+    if (S.activeProgram.custom) { var cp = S.customPrograms[S.activeProgram.id]; return cp ? cp.dayList : null; }
     var g = D.PROGRAMS[S.activeProgram.goal];
     return g ? g[S.activeProgram.days] : null;
   }
@@ -219,6 +234,12 @@
         alts.map(function (a) { return { name: a.name, muscle: a.muscle, pr: null }; })
       );
     }
+    if (slot.t === "ex") {
+      var ea = (D.ALTERNATIVES && D.ALTERNATIVES[slot.name]) || [];
+      return [{ name: slot.name, muscle: slot.muscle, pr: slot.pr }].concat(
+        ea.map(function (a) { return { name: a.name, muscle: a.muscle, pr: null }; })
+      );
+    }
     if (slot.t === "pool") return slot.options;
     return [];
   }
@@ -262,6 +283,19 @@
         type: "main", name: slot.name, muscle: slot.muscle, pr: null,
         sets: workSets(slot.sets), reps: slot.reps, pct: null,
         swapped: false, optIdx: 0, optionCount: 1, custom: true
+      };
+    }
+    if (slot.t === "ex") {
+      // custom-program exercise: measured, swappable to alternatives, optional PR lift
+      var exOpts = slotOptions(slot);
+      var exSw = getSwap(dayIdx, sid);
+      var exIdx = (exSw != null && exSw < exOpts.length) ? exSw : 0;
+      var exOpt = exOpts[exIdx] || exOpts[0] || { name: slot.name, muscle: slot.muscle };
+      return {
+        type: "main", name: exOpt.name, muscle: exOpt.muscle,
+        pr: (exIdx === 0 && slot.pr) ? slot.pr : null,
+        sets: workSets(slot.sets), reps: slot.reps, pct: null,
+        swapped: exIdx !== 0, optIdx: exIdx, optionCount: exOpts.length
       };
     }
     // main / pool — both swappable
@@ -366,8 +400,7 @@
     $("#lvXpFill").style.width = li.pct + "%";
     var sub = $("#topSubtitle");
     if (S.activeProgram) {
-      var g = D.GOALS[S.activeProgram.goal];
-      sub.textContent = g.name + " · " + S.activeProgram.days + " days/week";
+      sub.textContent = goalName() + " · " + S.activeProgram.days + " days/week";
     } else {
       sub.textContent = "Attack the Bar. Own the Path.";
     }
@@ -401,11 +434,12 @@
     var fab = $("#fabTimer");
     if (fab) fab.classList.add("hidden");
     try {
-      if (!S.activeProgram && view !== "guide" && view !== "programs") view = "programs";
+      if (!S.activeProgram && view !== "guide" && view !== "programs" && view !== "builder") view = "programs";
       if (!S.activeProgram && view === "programs") { host.innerHTML = renderOnboarding(); bindOnboarding(); window.scrollTo(0, 0); return; }
       if (view === "home") { host.innerHTML = renderHome(); bindHome(); }
       else if (view === "train") { host.innerHTML = renderTrain(); bindTrain(); }
       else if (view === "programs") { host.innerHTML = renderPrograms(); bindPrograms(); }
+      else if (view === "builder") { host.innerHTML = renderBuilder(); bindBuilder(); }
       else if (view === "workout") { host.innerHTML = renderWorkout(); bindWorkout(); if (fab) fab.classList.toggle("hidden", !isStarted(dayState(workoutDayIdx))); }
       else if (view === "guide") { host.innerHTML = renderGuide(); bindGuide(); }
       else if (view === "stats") { host.innerHTML = renderStats(); bindStats(); }
@@ -486,6 +520,7 @@
       '<div class="steplabel"><span class="n">\u2713</span><h2>Your split</h2></div>' +
       '<div class="card" id="previewCard">' + previewHtml(draft.goal, draft.days, draft.weekdays) + '</div>' +
       '<button class="btn primary" id="startBtn" style="margin-top:20px"' + (draft.weekdays.length === draft.days ? "" : " disabled") + '>Start This Program</button>' +
+      '<button class="btn ghost" id="buildOwnBtn" style="margin-top:10px">Or build your own from scratch</button>' +
       '</section>';
   }
   function prInputsHtml() {
@@ -529,6 +564,7 @@
       b.onclick = function () { draft.unit = b.dataset.unit; refreshOnboarding(); };
     });
     bindPrInputs();
+    var bo = $("#buildOwnBtn"); if (bo) bo.onclick = function () { openBuilder(null); };
     $("#startBtn").onclick = function () {
       if (draft.weekdays.length !== draft.days) { toast("📅", "Pick exactly " + draft.days + " training days first."); return; }
       startProgram(draft.goal, draft.days, draft.exp, draft.weekdays);
@@ -603,8 +639,18 @@
      ============================================================ */
   function todayDayIdx() {
     var wd = activeWeekdays(), dow = new Date().getDay();
-    var i = wd.indexOf(dow);
-    return i; // -1 if rest day
+    var k = wd.indexOf(dow);
+    if (k < 0) return -1; // rest day
+    return splitOrder()[k];
+  }
+  // Permutation mapping weekday-slot k (the k-th training day of the week) -> program day index.
+  function splitOrder() {
+    var n = activeDays() || 0;
+    var raw = (S.activeProgram && Array.isArray(S.activeProgram.dayOrder)) ? S.activeProgram.dayOrder.slice() : null;
+    var ok = raw && raw.length === n;
+    if (ok) { var seen = {}; for (var j = 0; j < n; j++) { var v = raw[j]; if (typeof v !== "number" || v < 0 || v >= n || seen[v]) { ok = false; break; } seen[v] = true; } }
+    if (!ok) { raw = []; for (var i = 0; i < n; i++) raw.push(i); }
+    return raw;
   }
   function doneThisWeek() {
     var sow = startOfWeek(new Date()), eow = new Date(sow.getTime() + 7 * DAY_MS);
@@ -617,7 +663,7 @@
     return Object.keys(seen).length;
   }
   function renderHome() {
-    var prog = activeProgramObj(), days = activeDays(), g = D.GOALS[S.activeProgram.goal];
+    var prog = activeProgramObj(), days = activeDays(), g = { name: goalName() };
     var li = levelInfo();
     var tIdx = todayDayIdx();
     var ph = phase();
@@ -641,11 +687,13 @@
     }
     var banner = '<div class="card banner glow">' +
       '<div class="row-between"><div><div class="goalname">' + esc(g.name) + '</div>' +
-      '<div class="meta">' + esc(prog.length) + '-day · ' + esc(D.PROGRAMS[S.activeProgram.goal].splitName[days]) + '</div></div>' +
+      '<div class="meta">' + esc(prog.length) + '-day · ' + esc(splitLabel()) + '</div></div>' +
       '<span class="chip accent">Lv ' + li.lv + ' · ' + esc(li.title) + '</span></div>' +
       '<div class="blockchips">' + blockchips + '</div>' +
       '<div class="phase-line"><div class="ptitle">Block ' + blockNum() + ' · Week ' + cycleWeek() + ' — ' + esc(ph.name) + ' <span class="muted" style="font-weight:600">(RPE ' + ph.rpe + ')</span></div>' +
-      '<div class="pnote">' + esc(ph.note) + '</div></div></div>';
+      '<div class="pnote">' + esc(ph.note) + '</div></div>' +
+      '<div class="row" style="gap:8px;margin-top:14px"><button class="btn ghost sm" data-editsplit>🧩 Edit split</button>' +
+      '<button class="btn ghost sm" data-editdays>📅 Edit days</button></div></div>';
 
     // steps
     var stp = S.steps[todayYmd()] || 0;
@@ -737,11 +785,12 @@
     var sow = startOfWeek(new Date()), wd = activeWeekdays(), id = programId(S.activeProgram);
     var doneDates = {};
     S.history.forEach(function (h) { if (h.programId === id) doneDates[h.date] = true; });
-    var todayStr = todayYmd(), cells = "", hasMakeup = false;
+    var todayStr = todayYmd(), cells = "", hasMakeup = false, order = splitOrder();
     for (var i = 0; i < 7; i++) {
       var d = new Date(sow.getTime() + i * DAY_MS), dstr = ymd(d);
-      var dayIdx = wd.indexOf(d.getDay());
-      var train = dayIdx >= 0;
+      var k = wd.indexOf(d.getDay());
+      var dayIdx = k >= 0 ? order[k] : -1;
+      var train = k >= 0;
       var done = doneDates[dstr];
       var cls = "daycell" + (train ? " train" : " rest") + (done ? " done" : "") + (dstr === todayStr ? " today" : "");
       var inner = '<div class="dow">' + DOW[d.getDay()][0] + '</div><div class="dotwrap"><span class="dot"></span></div>';
@@ -786,6 +835,7 @@
     $$("[data-exhist]").forEach(function (b) { b.onclick = function () { openExerciseHistory(b.dataset.exhist); }; });
     $$("[data-badge]").forEach(function (b) { b.onclick = function () { openBadgeInfo(b.dataset.badge); }; });
     $$("[data-editdays]").forEach(function (b) { b.onclick = openEditDays; });
+    $$("[data-editsplit]").forEach(function (b) { b.onclick = openSplitEditor; });
   }
   function addSteps() {
     var inp = $("#stepInput"); if (!inp) return;
@@ -804,27 +854,30 @@
      TRAIN — list of the program's days
      ============================================================ */
   function renderTrain() {
-    var prog = activeProgramObj(), wd = activeWeekdays();
+    var prog = activeProgramObj(), wd = activeWeekdays(), order = splitOrder();
     var ph = phase();
-    var tiles = prog.map(function (day, i) {
-      var ds = dayState(i), done = ds && ds.done;
+    var tiles = order.map(function (di, k) {
+      var day = prog[di];
+      var ds = dayState(di), done = ds && ds.done;
       var first = day.slots.filter(function (s) { return s.t !== "warmup"; })[0];
       var mus = first ? (first.t === "pool" ? first.options[0].muscle : first.muscle) : "fullbody";
-      return '<button class="daytile' + (done ? " done" : "") + '" data-day="' + i + '" style="margin-bottom:12px">' +
+      return '<button class="daytile' + (done ? " done" : "") + '" data-day="' + di + '" style="margin-bottom:12px">' +
         '<span class="av lg">' + avatarSVG(mus) + '</span>' +
         '<span class="info"><span class="dname">' + esc(day.name) + (done ? ' <span class="chip good" style="padding:2px 7px">Done</span>' : "") + '</span>' +
         '<span class="dfocus">' + esc(day.focus) + '</span>' +
-        '<span class="dmeta">' + DOW[wd[i]] + ' · ' + countWork(i) + ' exercises</span></span>' +
+        '<span class="dmeta">' + DOW[wd[k]] + ' · ' + countWork(di) + ' exercises</span></span>' +
         '<span class="go">' + ICON("arrow") + '</span></button>';
     }).join("");
     return '<section class="view">' +
-      '<div class="eyebrow">' + esc(D.GOALS[S.activeProgram.goal].name) + '</div>' +
+      '<div class="eyebrow">' + esc(goalName()) + '</div>' +
       '<h1 class="h1">Train</h1>' +
       '<div class="card mt3" style="padding:12px 16px"><div class="row-between"><div class="muted" style="font-size:var(--f-small)">Block ' + blockNum() + ' · Week ' + cycleWeek() + '</div><span class="chip accent">' + esc(ph.name) + ' · RPE ' + ph.rpe + '</span></div></div>' +
+      '<button class="btn ghost mt3" data-editsplit style="width:auto">🧩 Edit split</button>' +
       '<div class="mt4">' + tiles + '</div></section>';
   }
   function bindTrain() {
     $$("[data-day]").forEach(function (b) { b.onclick = function () { go("workout", +b.dataset.day); }; });
+    $$("[data-editsplit]").forEach(function (b) { b.onclick = openSplitEditor; });
   }
 
   /* ============================================================
@@ -1406,11 +1459,26 @@
         '<div class="muted" style="font-size:var(--f-small);margin:-6px 0 10px">' + esc(g.tagline) + '</div>' +
         '<div class="proglist">' + rows + '</div>';
     }).join("");
+    var cids = Object.keys(S.customPrograms || {});
+    var customRows = cids.map(function (id) {
+      var cp = S.customPrograms[id], active = ("custom-" + id) === curId;
+      return '<button class="progrow' + (active ? " active" : "") + '" data-customprog="' + id + '">' +
+        '<span class="swatch" style="background:linear-gradient(180deg,#2f7bff,#19c3ff)"></span>' +
+        '<span class="grow"><span style="font-weight:700">' + esc(cp.name) + '</span><br>' +
+        '<span class="muted" style="font-size:var(--f-small)">' + cp.days + '-day custom · ' + cp.dayList.length + ' sessions</span></span>' +
+        (active ? '<span class="chip accent">Active</span>' : ICON("arrow")) + '</button>';
+    }).join("");
+    var customSection = '<div class="section-head"><h2>Your programs</h2></div>' +
+      '<button class="btn primary" id="buildProgram" style="margin-bottom:12px">+ Build a custom program</button>' +
+      (customRows ? '<div class="proglist" style="margin-bottom:8px">' + customRows + '</div>'
+        : '<p class="muted" style="font-size:var(--f-small);margin:-4px 0 8px">Build your own split from scratch — name it, choose your days, and add exercises from the library or your own.</p>');
     return '<section class="view"><div class="eyebrow">Library</div><h1 class="h1">Programs</h1>' +
-      '<p class="muted" style="margin:6px 0 0;font-size:var(--f-small)">12 periodized programs. Switching keeps your level, streak, badges &amp; PRs.</p>' +
-      sections + '</section>';
+      '<p class="muted" style="margin:6px 0 16px;font-size:var(--f-small)">Build your own, or pick a periodized template. Switching keeps your level, streak, badges &amp; PRs.</p>' +
+      customSection + sections + '</section>';
   }
   function bindPrograms() {
+    var bp = $("#buildProgram"); if (bp) bp.onclick = function () { openBuilder(null); };
+    $$("[data-customprog]").forEach(function (b) { b.onclick = function () { openCustomProgMenu(b.dataset.customprog); }; });
     $$("[data-prog]").forEach(function (b) {
       b.onclick = function () {
         var p = b.dataset.prog.split(":"), goal = p[0], days = +p[1];
@@ -1419,6 +1487,171 @@
       };
     });
   }
+  /* ---- custom program builder + exercise library ---- */
+  var builderDraft = null;
+  function fullExerciseLibrary() {
+    return D.EXERCISE_LIBRARY.concat((S.customExercises || []).map(function (e) { return { name: e.name, muscle: e.muscle, custom: true }; }));
+  }
+  function openBuilder(editId) {
+    if (editId && S.customPrograms[editId]) {
+      var cp = S.customPrograms[editId];
+      builderDraft = {
+        id: editId, name: cp.name, days: cp.days,
+        weekdays: (cp.weekdays || defaultWeekdaysFor(cp.days)).slice(),
+        dayList: cp.dayList.map(function (d) { return { name: d.name, slots: d.slots.map(function (s) { return Object.assign({}, s); }) }; })
+      };
+    } else {
+      builderDraft = { id: null, name: "", days: 3, weekdays: defaultWeekdaysFor(3), dayList: [] };
+      builderEnsureDays();
+    }
+    view = "builder"; render();
+  }
+  function builderEnsureDays() {
+    var n = builderDraft.days;
+    while (builderDraft.dayList.length < n) builderDraft.dayList.push({ name: "Day " + (builderDraft.dayList.length + 1), slots: [] });
+    builderDraft.dayList = builderDraft.dayList.slice(0, n);
+    if (builderDraft.weekdays.length !== n) builderDraft.weekdays = defaultWeekdaysFor(n);
+  }
+  function renderBuilder() {
+    var b = builderDraft;
+    var freqChips = [1, 2, 3, 4, 5, 6].map(function (n) { return '<button class="chip filt' + (n === b.days ? " on" : "") + '" data-bfreq="' + n + '">' + n + '</button>'; }).join("");
+    var dayCards = b.dayList.map(function (day, i) {
+      var exRows = day.slots.length ? day.slots.map(function (s, j) {
+        return '<div class="edit-row"><span class="av" style="width:28px;height:28px;flex:0 0 auto">' + avatarSVG(s.muscle) + '</span>' +
+          '<span class="grow"><span style="font-weight:600">' + esc(s.name) + '</span><br><span class="muted" style="font-size:var(--f-tiny)">' + s.sets + ' \u00d7 ' + esc(s.reps) + ' \u00b7 ' + esc(s.muscle) + '</span></span>' +
+          '<button class="iconbtn xs" data-bxup="' + i + ":" + j + '"' + (j === 0 ? " disabled" : "") + '>\u25b2</button>' +
+          '<button class="iconbtn xs" data-bxdn="' + i + ":" + j + '"' + (j === day.slots.length - 1 ? " disabled" : "") + '>\u25bc</button>' +
+          '<button class="iconbtn xs danger" data-bxrm="' + i + ":" + j + '">\u2715</button></div>';
+      }).join("") : '<p class="muted" style="font-size:var(--f-small);margin:4px 0">No exercises yet.</p>';
+      return '<div class="card mt3"><input class="fld" data-bdayname="' + i + '" value="' + esc(day.name) + '" placeholder="Session name (e.g. Push)" />' +
+        '<div class="mt2">' + exRows + '</div>' +
+        '<button class="btn ghost sm mt2" data-baddex="' + i + '">+ Add exercise</button></div>';
+    }).join("");
+    return '<section class="view">' +
+      '<button class="btn ghost sm" data-bcancel style="width:auto;margin-bottom:12px">\u2039 Cancel</button>' +
+      '<h1 class="h1">' + (b.id ? "Edit program" : "Build a program") + '</h1>' +
+      '<label class="fldlbl mt3">Program name</label><input class="fld" id="bldName" value="' + esc(b.name) + '" placeholder="My split" />' +
+      '<label class="fldlbl mt3">Sessions per week</label><div class="chips-row">' + freqChips + '</div>' +
+      '<label class="fldlbl mt3">Training days</label><div class="daypick" id="bldDays">' + dayPickHtml(b.weekdays) + '</div>' +
+      '<div class="muted center" id="bldDayCount" style="font-size:var(--f-small);margin-top:8px">' + b.weekdays.length + ' / ' + b.days + ' selected</div>' +
+      '<div class="section-head mt4"><h2>Sessions</h2></div>' + dayCards +
+      '<button class="btn primary mt4" data-bsave>' + (b.id ? "Save changes" : "Create program") + '</button>' +
+      '<div style="height:24px"></div></section>';
+  }
+  function bindBuilder() {
+    var nm = $("#bldName"); if (nm) nm.oninput = function () { builderDraft.name = nm.value; };
+    $$("[data-bdayname]").forEach(function (inp) { inp.oninput = function () { builderDraft.dayList[+inp.dataset.bdayname].name = inp.value; }; });
+    $$("[data-bfreq]").forEach(function (b) { b.onclick = function () { builderDraft.days = +b.dataset.bfreq; builderEnsureDays(); render(); }; });
+    $$("[data-dow]", $("#bldDays")).forEach(function (b) {
+      b.onclick = function () {
+        var dw = +b.dataset.dow, sel = builderDraft.weekdays, idx = sel.indexOf(dw);
+        if (idx >= 0) sel.splice(idx, 1);
+        else { if (sel.length >= builderDraft.days) { toast("\uD83D\uDCC5", "That's " + builderDraft.days + " already \u2014 deselect one first."); return; } sel.push(dw); }
+        builderDraft.weekdays = sortDows(sel); render();
+      };
+    });
+    $$("[data-baddex]").forEach(function (b) {
+      b.onclick = function () {
+        var di = +b.dataset.baddex;
+        openExercisePicker(function (ex) {
+          builderDraft.dayList[di].slots.push({ t: "ex", name: ex.name, muscle: ex.muscle, sets: 3, reps: "8\u201312", pr: ex.pr || null });
+          render();
+        });
+      };
+    });
+    $$("[data-bxrm]").forEach(function (b) { b.onclick = function () { var p = b.dataset.bxrm.split(":"); builderDraft.dayList[+p[0]].slots.splice(+p[1], 1); render(); }; });
+    $$("[data-bxup]").forEach(function (b) { if (!b.disabled) b.onclick = function () { var p = b.dataset.bxup.split(":"); builderMoveEx(+p[0], +p[1], -1); }; });
+    $$("[data-bxdn]").forEach(function (b) { if (!b.disabled) b.onclick = function () { var p = b.dataset.bxdn.split(":"); builderMoveEx(+p[0], +p[1], 1); }; });
+    var bc = $("[data-bcancel]"); if (bc) bc.onclick = function () { builderDraft = null; setTab("programs"); };
+    var bs = $("[data-bsave]"); if (bs) bs.onclick = saveBuilder;
+  }
+  function builderMoveEx(di, j, dir) {
+    var arr = builderDraft.dayList[di].slots, nj = j + dir;
+    if (nj < 0 || nj >= arr.length) return;
+    var t = arr[j]; arr[j] = arr[nj]; arr[nj] = t; render();
+  }
+  function saveBuilder() {
+    var b = builderDraft;
+    var name = (b.name || "").trim();
+    if (!name) { toast("\u270f\ufe0f", "Name your program first."); return; }
+    if (b.weekdays.length !== b.days) { toast("\uD83D\uDCC5", "Pick exactly " + b.days + " training days."); return; }
+    var empty = b.dayList.filter(function (d) { return d.slots.length === 0; });
+    if (empty.length) { toast("\uD83C\uDFCB\ufe0f", "Add at least one exercise to every session."); return; }
+    var id = b.id || ("cp" + Date.now().toString(36));
+    S.customPrograms[id] = {
+      id: id, name: name, days: b.days, weekdays: sortDows(b.weekdays).slice(),
+      dayList: b.dayList.map(function (d, i) {
+        return { name: (d.name || "Day " + (i + 1)).trim(), focus: d.slots.slice(0, 3).map(function (s) { return s.muscle; }).filter(function (v, k, a) { return a.indexOf(v) === k; }).join(", "), slots: d.slots.map(function (s) { return Object.assign({}, s); }) };
+      })
+    };
+    save();
+    var wasEditingActive = b.id && S.activeProgram && S.activeProgram.custom && S.activeProgram.id === b.id;
+    builderDraft = null;
+    if (wasEditingActive) { setTab("home"); toast("\u2705", "Program updated"); return; }
+    activateCustom(id);
+  }
+  function activateCustom(id) {
+    var cp = S.customPrograms[id]; if (!cp) return;
+    S.activeProgram = { custom: true, id: id, days: cp.days, exp: (S.activeProgram ? S.activeProgram.exp : "intermediate"), weekdays: (cp.weekdays || defaultWeekdaysFor(cp.days)).slice() };
+    S.startedAt = new Date().toISOString(); S.weekOffset = 0;
+    S.programsTried[programId(S.activeProgram)] = true;
+    checkBadges();
+    save(); applyAccent();
+    toast("\uD83D\uDE80", cp.name + " activated");
+    setTab("home");
+  }
+  function openCustomProgMenu(id) {
+    var cp = S.customPrograms[id]; if (!cp) return;
+    var active = programId(S.activeProgram) === "custom-" + id;
+    openSheet('<div class="grip"></div><h3>' + esc(cp.name) + '</h3>' +
+      '<p class="muted" style="font-size:var(--f-small);margin:0 0 14px">' + cp.days + '-day custom \u00b7 ' + cp.dayList.length + ' sessions</p>' +
+      '<button class="btn primary" data-cpuse>' + (active ? "Go to program" : "Use this program") + '</button>' +
+      '<button class="btn ghost mt2" data-cpedit>Edit program</button>' +
+      '<button class="btn danger mt2" data-cpdel>Delete program</button>');
+    $("[data-cpuse]").onclick = function () { closeSheet(); if (active) { setTab("home"); } else { activateCustom(id); } };
+    $("[data-cpedit]").onclick = function () { closeSheet(); openBuilder(id); };
+    $("[data-cpdel]").onclick = function () {
+      if (active) { toast("\u26a0\ufe0f", "This is your active program \u2014 switch to another first."); return; }
+      openConfirm("Delete this program?", "Removes \"" + cp.name + "\" and its saved sessions. Your workout history stays.", "Delete", function () {
+        delete S.customPrograms[id]; save(); render(); toast("\uD83D\uDDD1\ufe0f", "Program deleted");
+      });
+    };
+  }
+  function openExercisePicker(onPick) {
+    var lib = fullExerciseLibrary();
+    var muscle = "all";
+    var muscleOpts = D.EXERCISE_MUSCLES.map(function (m) { return '<option value="' + m + '">' + m.charAt(0).toUpperCase() + m.slice(1) + '</option>'; }).join("");
+    openSheet('<div class="grip"></div><h3>Add exercise</h3>' +
+      '<input class="fld" id="exSearch" placeholder="Search the library" />' +
+      '<div class="chips-row" id="exChips" style="margin:10px 0 6px"></div>' +
+      '<div id="exPickList" style="max-height:38vh;overflow:auto"></div>' +
+      '<div class="card mt3"><div class="eyebrow">Not in the library?</div>' +
+      '<input class="fld" id="exNewName" placeholder="Custom exercise name" style="margin-top:8px" />' +
+      '<select class="fld" id="exNewMuscle" style="margin-top:8px">' + muscleOpts + '</select>' +
+      '<button class="btn primary mt2" id="exNewAdd">Add custom &amp; use</button></div>');
+    function draw() {
+      var q = ($("#exSearch").value || "").toLowerCase().trim();
+      var chips = ["all"].concat(D.EXERCISE_MUSCLES).map(function (m) { return '<button class="chip filt' + (m === muscle ? " on" : "") + '" data-mfilt="' + m + '">' + (m === "all" ? "All" : m.charAt(0).toUpperCase() + m.slice(1)) + '</button>'; }).join("");
+      $("#exChips").innerHTML = chips;
+      $$("[data-mfilt]", $("#exChips")).forEach(function (c) { c.onclick = function () { muscle = c.dataset.mfilt; draw(); }; });
+      var filt = lib.filter(function (e) { return (muscle === "all" || e.muscle === muscle) && (!q || e.name.toLowerCase().indexOf(q) >= 0); });
+      $("#exPickList").innerHTML = filt.length ? filt.map(function (e) {
+        var gi = lib.indexOf(e);
+        return '<button class="swap-opt" data-pick="' + gi + '"><span class="av">' + avatarSVG(e.muscle) + '</span>' +
+          '<span class="grow"><span style="font-weight:700">' + esc(e.name) + '</span><br><span class="muted" style="font-size:var(--f-small);text-transform:capitalize">' + esc(e.muscle) + (e.custom ? " \u00b7 custom" : "") + (e.pr ? " \u00b7 tracks PR" : "") + '</span></span></button>';
+      }).join("") : '<p class="muted" style="font-size:var(--f-small);padding:8px 2px">No matches \u2014 add it as a custom exercise below.</p>';
+      $$("[data-pick]", $("#exPickList")).forEach(function (b) { b.onclick = function () { var e = lib[+b.dataset.pick]; closeSheet(); onPick({ name: e.name, muscle: e.muscle, pr: e.pr || null }); }; });
+    }
+    $("#exSearch").oninput = draw;
+    $("#exNewAdd").onclick = function () {
+      var nm = ($("#exNewName").value || "").trim(); if (!nm) { toast("\u270f\ufe0f", "Name the exercise first."); return; }
+      var mus = $("#exNewMuscle").value || "fullbody";
+      S.customExercises.push({ id: "ce" + Date.now().toString(36), name: nm, muscle: mus });
+      save(); closeSheet(); onPick({ name: nm, muscle: mus, pr: null });
+    };
+    draw();
+  }
+
   function attemptSwitch(goal, days) {
     var we = weeksElapsed();
     var openExp = function () { openExpPicker(goal, days); };
@@ -1442,6 +1675,36 @@
     $$("[data-pickexp]", $("#sheet")).forEach(function (b) {
       b.onclick = function () { openSwitchDayPicker(goal, days, b.dataset.pickexp); };
     });
+  }
+  function openSplitEditor() {
+    if (!S.activeProgram) return;
+    var prog = activeProgramObj(), wd = activeWeekdays(), order = splitOrder();
+    var rows = order.map(function (di, k) {
+      var day = prog[di];
+      var first = day.slots.filter(function (s) { return s.t !== "warmup"; })[0];
+      var mus = first ? (first.t === "pool" ? first.options[0].muscle : first.muscle) : "fullbody";
+      return '<div class="edit-row">' +
+        '<span class="split-day">' + DOW[wd[k]] + '</span>' +
+        '<span class="av" style="width:30px;height:30px;flex:0 0 auto">' + avatarSVG(mus) + '</span>' +
+        '<span class="grow"><span style="font-weight:600">' + esc(day.name) + '</span><br><span class="muted" style="font-size:var(--f-tiny)">' + esc(day.focus) + '</span></span>' +
+        '<button class="iconbtn xs" data-splitup="' + k + '"' + (k === 0 ? " disabled" : "") + ' aria-label="Move earlier">▲</button>' +
+        '<button class="iconbtn xs" data-splitdn="' + k + '"' + (k === order.length - 1 ? " disabled" : "") + ' aria-label="Move later">▼</button>' +
+        '<button class="iconbtn xs" data-splitedit="' + di + '" aria-label="Edit exercises">✎</button>' +
+        '</div>';
+    }).join("");
+    openSheet('<div class="grip"></div><h3>Edit your split</h3>' +
+      '<p class="muted" style="font-size:var(--f-small);margin:0 0 12px">Arrange which session lands on each training day — move sessions with the arrows. Tap ✎ to tune the exercises and muscle groups inside a session. Your logged history stays with each session.</p>' +
+      '<div class="card">' + rows + '</div>');
+    $$("[data-splitup]").forEach(function (b) { if (!b.disabled) b.onclick = function () { moveSplit(+b.dataset.splitup, -1); }; });
+    $$("[data-splitdn]").forEach(function (b) { if (!b.disabled) b.onclick = function () { moveSplit(+b.dataset.splitdn, 1); }; });
+    $$("[data-splitedit]").forEach(function (b) { b.onclick = function () { openDayEditor(+b.dataset.splitedit); }; });
+  }
+  function moveSplit(k, dir) {
+    var o = splitOrder(), nk = k + dir;
+    if (nk < 0 || nk >= o.length) return;
+    var t = o[k]; o[k] = o[nk]; o[nk] = t;
+    S.activeProgram.dayOrder = o;
+    save(); openSplitEditor(); render();
   }
   function openEditDays() {
     if (!S.activeProgram) return;
@@ -1589,7 +1852,7 @@
     var strength = progressChartHtml();
 
     return '<section class="view">' +
-      '<div class="eyebrow">' + esc(D.GOALS[S.activeProgram.goal].name) + '</div><h1 class="h1">Your stats</h1>' +
+      '<div class="eyebrow">' + esc(goalName()) + '</div><h1 class="h1">Your stats</h1>' +
       tiles + gauges + lvl +
       '<div class="section-head"><h2>Trends</h2></div>' +
       workoutsChart + volChart + strength +
@@ -1978,7 +2241,9 @@
     { icon: "👋", title: "Welcome to Barpath", body: "This is your home base. Today's session, your level, streak, and progress all live here — check in before every workout." },
     { icon: "🏋️", title: "Log every set", body: "Open <b>Train</b>, hit Start, then tap any exercise to log weight and reps. Work through them in any order and check each one off." },
     { icon: "🔁", title: "Make it your own", body: "Swap an exercise for an alternative, skip one around an injury, or tap <b>✎ Edit exercises</b> to reorder and add your own movements." },
-    { icon: "📈", title: "Watch yourself get stronger", body: "Save PRs and your strength chart fills in. Tap any lift to see its full session history and trend." },
+    { icon: "🗓️", title: "Shape your week", body: "Use <b>Edit days</b> to move your sessions onto the weekdays that suit you, and <b>Edit split</b> to choose which session lands on each day — without losing any history." },
+    { icon: "🧱", title: "Build your own", body: "Want full control? In <b>Programs</b>, tap <b>Build a custom program</b> — name it, pick your days, and add exercises from the library or create your own." },
+    { icon: "📈", title: "Track your progress", body: "Save PRs as you train, then open the <b>Stats</b> tab for fuel gauges, weekly charts, and your strength trends. Tap any lift for its full history." },
     { icon: "💾", title: "Keep your progress safe", body: "Everything is stored on this device. Now and then, use <b>Guide → Export backup</b> so you never lose your history." }
   ];
   var _tutIdx = 0, _tutReplay = false, _tutKey = null;

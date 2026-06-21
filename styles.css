@@ -171,6 +171,9 @@ button.link:active { opacity: .6; }
 }
 .chip.accent { color: var(--accent-2); border-color: rgba(47,123,255,.3); background: rgba(47,123,255,.10); }
 .chip.good { color: var(--good); border-color: rgba(46,194,138,.3); background: rgba(46,194,138,.08); }
+.chips-row { display: flex; flex-wrap: wrap; gap: 7px; }
+.chip.filt { cursor: pointer; text-transform: capitalize; padding: 7px 12px; }
+.chip.filt.on { color: #061018; background: linear-gradient(180deg, var(--accent), var(--accent-2)); border-color: transparent; }
 
 /* progress ring ---------------------------------------------- */
 .ring { transform: rotate(-90deg); }
@@ -527,6 +530,7 @@ button.hist-row:active { opacity: .65; }
 .edit-row { display: flex; align-items: center; gap: 6px; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .edit-row:last-child { border-bottom: none; }
 .edit-row .grow { flex: 1 1 auto; min-width: 0; }
+.edit-row .split-day { flex: 0 0 auto; width: 38px; font-weight: 800; font-size: var(--f-small); color: var(--accent-2); text-transform: uppercase; letter-spacing: .03em; }
 .iconbtn.xs { width: 34px; height: 34px; flex: 0 0 auto; border-radius: var(--r-sm); display: inline-grid; place-items: center; font-size: 13px; padding: 0; background: var(--surface-2); border: 1px solid var(--line); color: var(--text); }
 .iconbtn.xs[disabled] { opacity: .3; }
 .iconbtn.xs.danger { color: var(--danger, #ff4d57); }
