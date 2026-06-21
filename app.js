@@ -47,7 +47,7 @@
       xp: 0, badges: {}, streak: 0, lastWorkoutDate: null, freezes: 0,
       history: [], programsTried: {}, prs: {}, steps: {}, stepGoal: 8000,
       progress: {}, claimedChallenges: {}, swaps: {}, unit: "kg", customLifts: [],
-      xpLog: {}, exerciseHistory: {}, autoRest: true, dayMods: {}
+      xpLog: {}, exerciseHistory: {}, autoRest: true, dayMods: {}, tutorialSeen: false
     };
   }
   function migrate(s) {
@@ -73,6 +73,7 @@
     if (!s.exerciseHistory || typeof s.exerciseHistory !== "object") s.exerciseHistory = {};
     if (typeof s.autoRest !== "boolean") s.autoRest = true;
     if (!s.dayMods || typeof s.dayMods !== "object") s.dayMods = {};
+    if (typeof s.tutorialSeen !== "boolean") s.tutorialSeen = false;
     // migrate positional slot keys -> stable "b"+index ids (entries + swaps)
     if (!s._sidMigrated) {
       try {
@@ -407,6 +408,7 @@
       else if (view === "programs") { host.innerHTML = renderPrograms(); bindPrograms(); }
       else if (view === "workout") { host.innerHTML = renderWorkout(); bindWorkout(); if (fab) fab.classList.toggle("hidden", !isStarted(dayState(workoutDayIdx))); }
       else if (view === "guide") { host.innerHTML = renderGuide(); bindGuide(); }
+      else if (view === "stats") { host.innerHTML = renderStats(); bindStats(); }
       window.scrollTo(0, 0);
     } catch (e) {
       showFatal(e, host);
@@ -593,6 +595,7 @@
     save();
     toast("🚀", "Program started — let's go!");
     setTab("home");
+    if (first && !S.tutorialSeen) openTutorial(0, false);
   }
 
   /* ============================================================
@@ -630,13 +633,6 @@
         '<div class="av lg">' + avatarSVG("cardio") + '</div></div>' +
         '<button class="btn ghost" id="logAnyBtn" style="margin-top:14px">Log a Workout</button></div>';
     }
-
-    // stat row
-    var stats = '<div class="stats">' +
-      stat(S.streak, "Streak") +
-      stat(doneThisWeek() + "/" + days, "This Week") +
-      stat(S.history.length, "Workouts") +
-      stat(S.freezes, "Freezes") + '</div>';
 
     // banner
     var blockchips = "";
@@ -679,31 +675,40 @@
     // this week schedule
     var weekRow = weekScheduleHtml();
 
-    // badges
-    var badges = badgesGridHtml();
+    // merged status: level + key stats in one card
+    var statusCard = '<div class="card status-card mt3">' +
+      '<div class="row-between" style="align-items:flex-end"><div><div class="eyebrow">Level ' + li.lv + '</div>' +
+      '<div class="h2">' + esc(li.title) + '</div></div>' +
+      '<div class="muted" style="font-size:var(--f-small)">' + (li.lv < 10 ? li.into + " / " + li.span + " XP" : "Max level") + '</div></div>' +
+      '<div class="xpbar" style="height:8px;margin:10px 0 14px"><i style="width:' + li.pct + '%"></i></div>' +
+      '<div class="status-stats">' +
+      miniStat(S.streak, "Streak") + miniStat(doneThisWeek() + "/" + days, "This week") +
+      miniStat(S.history.length, "Workouts") + miniStat(S.freezes, "Freezes") + '</div></div>';
+
+    // slim achievements row
+    var earnedN = D.BADGES.filter(function (b) { return S.badges[b.id]; }).length;
+    var prCount = Object.keys(S.prs).filter(function (k) { return S.prs[k] && S.prs[k].value; }).length;
+    var achLine = '<div class="card ach-line mt3">' +
+      '<button class="ach-glance" data-tab-link="stats">🏅 ' + earnedN + ' / ' + D.BADGES.length + ' badges · ' + prCount + ' PRs ›</button>' +
+      '<button class="btn primary sm" id="hlLogPr" style="width:auto">🥇 Log a PR</button></div>';
 
     return '<section class="view">' +
       '<div class="section-head"><h2 class="h1">Today</h2><span class="muted" style="font-size:var(--f-small)">' + new Date().toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }) + '</span></div>' +
       todayCard +
-      '<div class="card glow mt3"><div class="row-between" style="align-items:flex-end"><div><div class="eyebrow">Level ' + li.lv + '</div><div class="h2">' + esc(li.title) + '</div></div>' +
-      '<div class="muted" style="font-size:var(--f-small)">' + (li.lv < 10 ? li.into + " / " + li.span + " XP" : "Max level") + '</div></div>' +
-      '<div class="xpbar" style="height:8px;margin-top:10px"><i style="width:' + li.pct + '%"></i></div></div>' +
-      stats +
-      achievementsHighlightHtml() +
-      progressChartHtml() +
+      statusCard +
+      achLine +
       '<div class="section-head"><h2>Your program</h2><span class="link" data-tab-link="programs">Switch</span></div>' +
       banner +
-      '<div class="section-head"><h2>Movement</h2></div>' +
-      stepsCard +
-      '<div class="section-head"><h2>Weekly challenge</h2></div>' +
-      challenge +
-      quote +
       '<div class="section-head"><h2>This week</h2></div>' +
       weekRow +
-      '<div class="section-head"><h2>Achievements</h2><span class="link" data-tab-link="guide">All</span></div>' +
-      badges +
+      '<div class="section-head"><h2>Weekly challenge</h2></div>' +
+      challenge +
+      '<div class="section-head"><h2>Movement</h2></div>' +
+      stepsCard +
+      quote +
       '</section>';
   }
+  function miniStat(n, l) { return '<div class="mstat"><div class="mnum">' + n + '</div><div class="mlbl">' + esc(l) + '</div></div>'; }
   function stat(n, l) { return '<div class="stat"><div class="num">' + n + '</div><div class="lbl">' + l + '</div></div>'; }
   function achievementsHighlightHtml() {
     var prCount = Object.keys(S.prs).filter(function (k) { return S.prs[k] && S.prs[k].value; }).length;
@@ -751,9 +756,21 @@
   function badgesGridHtml() {
     return '<div class="badges">' + D.BADGES.map(function (b) {
       var earned = !!S.badges[b.id];
-      return '<div class="badge' + (earned ? " earned" : "") + '" title="' + esc(b.desc) + '">' +
-        '<div class="bemoji">' + b.icon + '</div><div class="bname">' + esc(b.name) + '</div></div>';
+      return '<button class="badge' + (earned ? " earned" : "") + '" data-badge="' + b.id + '">' +
+        '<div class="bemoji">' + b.icon + '</div><div class="bname">' + esc(b.name) + '</div></button>';
     }).join("") + '</div>';
+  }
+  function openBadgeInfo(id) {
+    var b = D.BADGES.filter(function (x) { return x.id === id; })[0]; if (!b) return;
+    var at = S.badges[id];
+    var status = at
+      ? '<span class="chip good">Earned ' + esc(shortDate(("" + at).slice(0, 10))) + '</span>'
+      : '<span class="chip">Locked</span>';
+    openSheet('<div class="grip"></div><div style="text-align:center;padding:6px 0 4px">' +
+      '<div style="font-size:56px;line-height:1;' + (at ? "" : "filter:grayscale(1);opacity:.5") + '">' + b.icon + '</div>' +
+      '<h3 style="margin:10px 0 6px">' + esc(b.name) + '</h3>' +
+      '<p class="muted" style="font-size:var(--f-base);margin:0 0 14px">' + esc(b.desc) + '</p>' +
+      status + '</div>');
   }
   function bindHome() {
     $$("[data-day]").forEach(function (b) { b.onclick = function () { go("workout", +b.dataset.day); }; });
@@ -766,6 +783,7 @@
     var hp = $("#hlLogPr"); if (hp) hp.onclick = function () { openPrLogger(); };
     $$("[data-chartlift]").forEach(function (b) { b.onclick = function () { chartLift = b.dataset.chartlift; render(); }; });
     $$("[data-exhist]").forEach(function (b) { b.onclick = function () { openExerciseHistory(b.dataset.exhist); }; });
+    $$("[data-badge]").forEach(function (b) { b.onclick = function () { openBadgeInfo(b.dataset.badge); }; });
   }
   function addSteps() {
     var inp = $("#stepInput"); if (!inp) return;
@@ -1181,7 +1199,7 @@
     e.prSaved = true;
     awardXp(D.XP.pr, false);
     if (firstEver) earn("first-pr");
-    if (D.PR_LIFTS.every(function (l) { return S.prs[l.id] && !S.prs[l.id].seeded; })) earn("all-prs");
+    checkBadges();
     save(); burst();
     toast("🥇", "New PR: " + r.name + " " + val + " " + unitLabel() + "!");
     renderChrome();
@@ -1241,6 +1259,7 @@
     var m = dayMods(dayIdx);
     m.added.push({ id: id, name: nm, muscle: muscle, reps: reps, sets: sets });
     m.order = daySlots(dayIdx).map(function (o) { return o.sid; });
+    earn("architect");
     save(); openDayEditor(dayIdx); render(); toast("➕", "Added " + nm);
   }
   function finishWorkout() {
@@ -1257,18 +1276,18 @@
   function commitWorkout() {
     var prog = activeProgramObj(), day = prog[workoutDayIdx], ds = dayState(workoutDayIdx);
     var date = todayYmd();
+    // comeback: returning after a 7+ day layoff (check before streak update)
+    var gap = S.lastWorkoutDate ? daysBetween(S.lastWorkoutDate, date) : 0;
     ds.done = true; ds.finishedAt = new Date().toISOString();
     recordExercisePerf(date);
     S.history.push({ date: date, programId: programId(S.activeProgram), dayName: day.name, dayIdx: workoutDayIdx, makeup: false });
     awardXp(D.XP.workout, true);
     updateStreak();
-    if (S.history.length === 1) earn("first-workout");
-    if (S.history.length >= 10) earn("workouts-10");
-    if (S.history.length >= 50) earn("workouts-50");
-    if (S.streak >= 3) earn("streak-3");
-    if (S.streak >= 7) earn("streak-7");
-    if (S.streak >= 30) earn("streak-30");
-    if (allScheduledDoneThisWeek()) earn("full-week");
+    var hr = new Date().getHours();
+    if (hr < 7) earn("early-bird");
+    if (hr >= 21) earn("night-owl");
+    if (gap >= 7) earn("comeback");
+    checkBadges();
     save(); burst();
     toast("✅", "Workout logged. +" + D.XP.workout + " XP");
     go("home");
@@ -1359,13 +1378,7 @@
     awardXp(D.XP.workout, true);
     earn("makeup-day");
     if (isPast) backfillStreak(); else updateStreak();
-    if (S.history.length === 1) earn("first-workout");
-    if (S.history.length >= 10) earn("workouts-10");
-    if (S.history.length >= 50) earn("workouts-50");
-    if (S.streak >= 3) earn("streak-3");
-    if (S.streak >= 7) earn("streak-7");
-    if (S.streak >= 30) earn("streak-30");
-    if (allScheduledDoneThisWeek()) earn("full-week");
+    checkBadges();
     save(); closeSheet(); burst();
     toast("✅", (isPast ? "Past workout added" : "Workout logged") + ". +" + D.XP.workout + " XP");
     setTab("home");
@@ -1425,13 +1438,141 @@
     openSheet('<div class="grip"></div><h3>Start ' + days + '-Day ' + esc(g.name) + '</h3>' +
       '<p class="muted" style="font-size:var(--f-small);margin:0 0 14px">Confirm your experience level — it sets your starting volume.</p>' + opts);
     $$("[data-pickexp]", $("#sheet")).forEach(function (b) {
-      b.onclick = function () { closeSheet(); startProgram(goal, days, b.dataset.pickexp); };
+      b.onclick = function () { openSwitchDayPicker(goal, days, b.dataset.pickexp); };
     });
+  }
+  function openSwitchDayPicker(goal, days, exp) {
+    var cur = activeWeekdays();
+    var sel = (S.activeProgram && cur.length === days) ? sortDows(cur) : defaultWeekdaysFor(days);
+    var g = D.GOALS[goal];
+    openSheet('<div class="grip"></div><h3>' + days + '-Day ' + esc(g.name) + ' · training days</h3>' +
+      '<p class="muted" style="font-size:var(--f-small);margin:0 0 10px">Pick the ' + days + ' weekdays you\u2019ll train. Each session lands on its own day so you get a 24-hour recovery buffer.</p>' +
+      '<div class="daypick" id="swDayPick">' + dayPickHtml(sel) + '</div>' +
+      '<div class="muted center" id="swDayCount" style="font-size:var(--f-small);margin:12px 0">' + sel.length + ' / ' + days + ' selected</div>' +
+      '<button class="btn primary" id="swStart"' + (sel.length === days ? "" : " disabled") + '>Start program</button>');
+    function refresh() {
+      $$("[data-dow]", $("#sheet")).forEach(function (x) { x.classList.toggle("on", sel.indexOf(+x.dataset.dow) >= 0); });
+      var c = $("#swDayCount"); if (c) c.textContent = sel.length + " / " + days + " selected";
+      var st = $("#swStart"); if (st) st.disabled = sel.length !== days;
+    }
+    $$("[data-dow]", $("#sheet")).forEach(function (b) {
+      b.onclick = function () {
+        var dw = +b.dataset.dow, idx = sel.indexOf(dw);
+        if (idx >= 0) sel.splice(idx, 1);
+        else { if (sel.length >= days) { toast("📅", "That\u2019s " + days + " already — deselect one to change it."); return; } sel.push(dw); }
+        refresh();
+      };
+    });
+    $("#swStart").onclick = function () {
+      if (sel.length !== days) return;
+      closeSheet();
+      startProgram(goal, days, exp, sortDows(sel));
+    };
   }
 
   /* ============================================================
-     GUIDE
+     STATS — fitness dashboard
      ============================================================ */
+  function fmtNum(n) { try { return Math.round(n).toLocaleString(); } catch (e) { return "" + Math.round(n); } }
+  function weekBuckets(n) {
+    var sow = startOfWeek(new Date()), arr = [];
+    for (var i = n - 1; i >= 0; i--) {
+      var s = new Date(sow.getTime() - i * 7 * DAY_MS);
+      arr.push({ start: s, end: new Date(s.getTime() + 7 * DAY_MS), label: (s.getMonth() + 1) + "/" + s.getDate() });
+    }
+    return arr;
+  }
+  function volumeByDate() {
+    var m = {};
+    Object.keys(S.exerciseHistory || {}).forEach(function (nm) {
+      (S.exerciseHistory[nm] || []).forEach(function (e) {
+        var v = 0; (e.sets || []).forEach(function (s) { v += (parseFloat(s.w) || 0) * (parseInt(s.r, 10) || 0); });
+        m[e.date] = (m[e.date] || 0) + v;
+      });
+    });
+    return m;
+  }
+  function gauge(pct, label, val, color) {
+    pct = clamp(pct, 0, 1);
+    var r = 42, cx = 55, cy = 55, circ = Math.PI * r;
+    var path = "M " + (cx - r) + " " + cy + " A " + r + " " + r + " 0 0 1 " + (cx + r) + " " + cy;
+    return '<div class="gauge"><svg viewBox="0 0 110 64" width="100%" height="72" aria-hidden="true">' +
+      '<path d="' + path + '" fill="none" stroke="var(--line)" stroke-width="9" stroke-linecap="round"/>' +
+      '<path d="' + path + '" fill="none" stroke="' + (color || "var(--accent-2)") + '" stroke-width="9" stroke-linecap="round" stroke-dasharray="' + circ.toFixed(1) + '" stroke-dashoffset="' + (circ * (1 - pct)).toFixed(1) + '"/>' +
+      '</svg><div class="gauge-val">' + val + '</div><div class="gauge-lbl">' + esc(label) + '</div></div>';
+  }
+  function miniBars(vals, labels, color) {
+    var W = 300, H = 124, pad = 20, n = vals.length || 1;
+    var max = Math.max.apply(null, vals.concat([1]));
+    var gap = (W - 2 * pad) / n, bw = gap * 0.58;
+    var bars = vals.map(function (v, i) {
+      var h = (v / max) * (H - 2 * pad - 6);
+      var x = pad + i * gap + (gap - bw) / 2, y = H - pad - h;
+      return '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(0, h).toFixed(1) + '" rx="3" fill="' + (color || "var(--accent-2)") + '"/>' +
+        (v > 0 ? '<text x="' + (x + bw / 2).toFixed(1) + '" y="' + (y - 4).toFixed(1) + '" text-anchor="middle" font-size="9" fill="var(--muted)">' + fmtNum(v) + '</text>' : "") +
+        '<text x="' + (x + bw / 2).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle" font-size="8" fill="var(--faint)">' + esc(labels[i]) + '</text>';
+    }).join("");
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="132" role="img" aria-label="Weekly chart">' + bars + '</svg>';
+  }
+  function renderStats() {
+    var li = levelInfo();
+    var workouts = S.history.length;
+    var vol = lifetimeVolume();
+    var prCount = Object.keys(S.prs).filter(function (k) { return S.prs[k] && S.prs[k].value; }).length;
+    var tiles = '<div class="stat-tiles">' +
+      statTile("🏋️", fmtNum(workouts), "Workouts") +
+      statTile("🔥", fmtNum(S.streak), "Day streak") +
+      statTile("🏗️", fmtNum(vol), "Volume (" + unitLabel() + ")") +
+      statTile("🥇", fmtNum(prCount), "PRs set") + '</div>';
+
+    var today = todayYmd();
+    var dtw = doneThisWeek(), target = activeDays();
+    var steps = S.steps[today] || 0, sgoal = S.stepGoal || 8000;
+    var wxp = weeklyXp(), xpGoal = 400;
+    var gauges = '<div class="card"><div class="eyebrow" style="margin-bottom:10px">This week</div><div class="gauges">' +
+      gauge(target ? dtw / target : 0, "Sessions", dtw + "/" + target) +
+      gauge(sgoal ? steps / sgoal : 0, "Steps today", fmtNum(steps), "#19c3ff") +
+      gauge(xpGoal ? wxp / xpGoal : 0, "XP this week", fmtNum(wxp), "#7c5cff") +
+      '</div></div>';
+
+    var lvl = '<div class="card"><div class="row-between"><div class="eyebrow">Level ' + li.lv + ' · ' + esc(li.title) + '</div>' +
+      '<div class="muted" style="font-size:var(--f-small)">' + fmtNum(li.into) + ' / ' + fmtNum(li.span) + ' XP</div></div>' +
+      '<div class="xpbar" style="margin-top:10px"><i style="width:' + Math.round(li.pct) + '%"></i></div></div>';
+
+    var bk = weekBuckets(8), labels = bk.map(function (b) { return b.label; });
+    var wkCounts = bk.map(function (b) {
+      var c = 0; var dd = {};
+      S.history.forEach(function (h) { var d = parseYmd(h.date); if (d >= b.start && d < b.end) dd[h.date] = true; });
+      return Object.keys(dd).length;
+    });
+    var vbd = volumeByDate();
+    var wkVol = bk.map(function (b) {
+      var v = 0; Object.keys(vbd).forEach(function (dt) { var d = parseYmd(dt); if (d >= b.start && d < b.end) v += vbd[dt]; });
+      return Math.round(v);
+    });
+    var workoutsChart = '<div class="card"><div class="eyebrow" style="margin-bottom:6px">Workouts per week</div>' + miniBars(wkCounts, labels) + '</div>';
+    var hasVol = wkVol.some(function (v) { return v > 0; });
+    var volChart = '<div class="card"><div class="eyebrow" style="margin-bottom:6px">Volume per week (' + unitLabel() + ')</div>' +
+      (hasVol ? miniBars(wkVol, labels, "#19c3ff") : '<div class="chart-empty muted">Log sets in your workouts to see weekly volume.</div>') + '</div>';
+
+    var strength = progressChartHtml();
+
+    return '<section class="view">' +
+      '<div class="eyebrow">' + esc(D.GOALS[S.activeProgram.goal].name) + '</div><h1 class="h1">Your stats</h1>' +
+      tiles + gauges + lvl +
+      '<div class="section-head"><h2>Trends</h2></div>' +
+      workoutsChart + volChart + strength +
+      '</section>';
+  }
+  function statTile(icon, num, label) {
+    return '<div class="stat-tile"><div class="st-ic">' + icon + '</div><div class="st-num">' + num + '</div><div class="st-lbl">' + esc(label) + '</div></div>';
+  }
+  function bindStats() {
+    $$("[data-chartlift]").forEach(function (b) { b.onclick = function () { chartLift = b.dataset.chartlift; render(); }; });
+    $$("[data-exhist]").forEach(function (b) { b.onclick = function () { openExerciseHistory(b.dataset.exhist); }; });
+  }
+
+
   function renderGuide() {
     var prs = allPrLifts().map(function (l) {
       var pr = S.prs[l.id];
@@ -1485,6 +1626,7 @@
       historyCard +
       '<div class="section-head"><h2>Achievements</h2></div>' + badges +
       '<div class="section-head"><h2>How it works</h2></div>' + acc +
+      '<button class="btn ghost sm" id="replayTutorial" style="margin-top:10px">▶ Replay the tutorial</button>' +
       '<div class="section-head"><h2>Settings</h2></div>' +
       '<div class="card"><label class="fldlbl">Weight units</label>' +
       '<div class="segment" id="unitSegGuide"><button class="' + (S.unit === "kg" ? "on" : "") + '" data-gunit="kg">Kilograms (kg)</button>' +
@@ -1510,6 +1652,8 @@
     $$("[data-histidx]").forEach(function (b) { b.onclick = function () { openWorkoutEntry(+b.dataset.histidx); }; });
     $$("[data-gunit]").forEach(function (b) { b.onclick = function () { S.unit = b.dataset.gunit; save(); render(); toast("⚖️", "Units set to " + unitLabel()); }; });
     var art = $("#autoRestToggle"); if (art) art.onclick = function () { S.autoRest = !S.autoRest; save(); render(); toast(S.autoRest ? "⏱️" : "⏱️", "Auto rest timer " + (S.autoRest ? "on" : "off")); };
+    var rt = $("#replayTutorial"); if (rt) rt.onclick = function () { openTutorial(0, true); };
+    $$("[data-badge]").forEach(function (b) { b.onclick = function () { openBadgeInfo(b.dataset.badge); }; });
     var ex = $("#exportData"); if (ex) ex.onclick = exportData;
     var im = $("#importData"); if (im) im.onclick = openImport;
     $("#resetAll").onclick = function () {
@@ -1553,7 +1697,7 @@
     if (S.exerciseHistory[nm].length > 40) S.exerciseHistory[nm] = S.exerciseHistory[nm].slice(-40);
     awardXp(D.XP.pr, false);
     earn("first-pr");
-    if (D.PR_LIFTS.every(function (l) { return S.prs[l.id] && !S.prs[l.id].seeded; })) earn("all-prs");
+    checkBadges();
     save(); burst();
     toast("🥇", "New PR: " + nm + " " + val + " " + unitLabel() + "!");
     render();
@@ -1697,6 +1841,7 @@
     S.claimedChallenges[key] = true;
     S.freezes += 1;
     awardXp(D.XP.challenge, true);
+    earn("challenger"); checkBadges();
     save(); burst(); toast("🏆", "Challenge complete! +" + D.XP.challenge + " XP, +1 freeze");
     render();
   }
@@ -1717,6 +1862,48 @@
       showLevelUp(after);
     }
     if (rerender) renderChrome();
+  }
+  function lifetimeVolume() {
+    var v = 0;
+    Object.keys(S.exerciseHistory || {}).forEach(function (n) {
+      (S.exerciseHistory[n] || []).forEach(function (e) {
+        (e.sets || []).forEach(function (s) { var w = parseFloat(s.w) || 0, r = parseInt(s.r, 10) || 0; v += w * r; });
+      });
+    });
+    return Math.round(v);
+  }
+  function trainedWeekendSameWeek() {
+    var byWeek = {};
+    S.history.forEach(function (h) {
+      var d = parseYmd(h.date), k = isoWeekKey(d);
+      (byWeek[k] = byWeek[k] || {})[d.getDay()] = true;
+    });
+    return Object.keys(byWeek).some(function (k) { return byWeek[k][0] && byWeek[k][6]; });
+  }
+  // Central milestone evaluation — safe to call after any progress event.
+  function checkBadges() {
+    var n = S.history.length;
+    if (n >= 1) earn("first-workout");
+    if (n >= 10) earn("workouts-10");
+    if (n >= 50) earn("workouts-50");
+    if (n >= 100) earn("century");
+    if (S.streak >= 3) earn("streak-3");
+    if (S.streak >= 7) earn("streak-7");
+    if (S.streak >= 14) earn("streak-14");
+    if (S.streak >= 30) earn("streak-30");
+    var lv = levelInfo().lv;
+    if (lv >= 5) earn("level-5");
+    if (lv >= 10) earn("level-10");
+    var vol = lifetimeVolume();
+    if (vol >= 10000) earn("volume-10k");
+    if (vol >= 50000) earn("volume-50k");
+    if (trainedWeekendSameWeek()) earn("weekend-warrior");
+    var tried = Object.keys(S.programsTried || {}).length;
+    if (tried >= 2) earn("explorer");
+    if (tried >= 4) earn("globetrotter");
+    if (D.PR_LIFTS.every(function (l) { return S.prs[l.id] && !S.prs[l.id].seeded; })) earn("all-prs");
+    if (Object.keys(S.claimedChallenges || {}).length >= 1) earn("challenger");
+    if (allScheduledDoneThisWeek()) earn("full-week");
   }
   function earn(id) {
     if (S.badges[id]) return;
@@ -1754,6 +1941,55 @@
   function closeLevelUp() {
     $("#levelup").classList.remove("show");
     if (_luKey) { document.removeEventListener("keydown", _luKey, true); _luKey = null; }
+  }
+  /* ---- first-run tutorial ---- */
+  var TUTORIAL_SLIDES = [
+    { icon: "👋", title: "Welcome to Barpath", body: "This is your home base. Today's session, your level, streak, and progress all live here — check in before every workout." },
+    { icon: "🏋️", title: "Log every set", body: "Open <b>Train</b>, hit Start, then tap any exercise to log weight and reps. Work through them in any order and check each one off." },
+    { icon: "🔁", title: "Make it your own", body: "Swap an exercise for an alternative, skip one around an injury, or tap <b>✎ Edit exercises</b> to reorder and add your own movements." },
+    { icon: "📈", title: "Watch yourself get stronger", body: "Save PRs and your strength chart fills in. Tap any lift to see its full session history and trend." },
+    { icon: "💾", title: "Keep your progress safe", body: "Everything is stored on this device. Now and then, use <b>Guide → Export backup</b> so you never lose your history." }
+  ];
+  var _tutIdx = 0, _tutReplay = false, _tutKey = null;
+  function openTutorial(start, replay) {
+    _tutIdx = start || 0; _tutReplay = !!replay;
+    renderTutorial();
+    var t = $("#tutorial"); t.classList.add("show");
+    setTimeout(function () { var b = $("#tutNext"); if (b) b.focus(); }, 50);
+    _tutKey = function (e) {
+      if (e.key === "Escape") { e.preventDefault(); closeTutorial(true); }
+      else if (e.key === "ArrowRight") { e.preventDefault(); tutGo(1); }
+      else if (e.key === "ArrowLeft") { e.preventDefault(); tutGo(-1); }
+    };
+    document.addEventListener("keydown", _tutKey, true);
+  }
+  function renderTutorial() {
+    var s = TUTORIAL_SLIDES[_tutIdx], last = _tutIdx === TUTORIAL_SLIDES.length - 1;
+    var dots = TUTORIAL_SLIDES.map(function (_, i) { return '<span class="tut-dot' + (i === _tutIdx ? " on" : "") + '"></span>'; }).join("");
+    $("#tutorial").innerHTML = '<div class="tut-card">' +
+      '<button class="tut-skip" id="tutSkip">' + (last ? "" : "Skip") + '</button>' +
+      '<div class="tut-icon">' + s.icon + '</div>' +
+      '<h2 class="tut-title">' + esc(s.title) + '</h2>' +
+      '<p class="tut-body">' + s.body + '</p>' +
+      '<div class="tut-dots">' + dots + '</div>' +
+      '<div class="tut-nav">' +
+      (_tutIdx > 0 ? '<button class="btn ghost" id="tutBack">Back</button>' : '') +
+      '<button class="btn primary" id="tutNext">' + (last ? (_tutReplay ? "Done" : "Start training →") : "Next") + '</button>' +
+      '</div></div>';
+    var sk = $("#tutSkip"); if (sk) sk.onclick = function () { closeTutorial(true); };
+    var bk = $("#tutBack"); if (bk) bk.onclick = function () { tutGo(-1); };
+    $("#tutNext").onclick = function () { if (last) closeTutorial(true); else tutGo(1); };
+  }
+  function tutGo(dir) {
+    var ni = _tutIdx + dir;
+    if (ni < 0 || ni >= TUTORIAL_SLIDES.length) return;
+    _tutIdx = ni; renderTutorial();
+    var b = $("#tutNext"); if (b) b.focus();
+  }
+  function closeTutorial(markSeen) {
+    $("#tutorial").classList.remove("show");
+    if (_tutKey) { document.removeEventListener("keydown", _tutKey, true); _tutKey = null; }
+    if (markSeen && !S.tutorialSeen) { S.tutorialSeen = true; save(); }
   }
 
   /* ============================================================
@@ -1829,10 +2065,10 @@
   window.addEventListener("resize", sizeCanvas); sizeCanvas();
   function burst() {
     if (rm) return;
-    var cols = ["#2f7bff", "#19c3ff", "#a855f7", "#2ec28a", "#ffb020", "#ff4d57"];
-    for (var i = 0; i < 90; i++) {
-      parts.push({ x: innerWidth / 2, y: innerHeight * 0.42, vx: (Math.random() - 0.5) * 11, vy: Math.random() * -11 - 3,
-        g: 0.32 + Math.random() * 0.2, s: 5 + Math.random() * 6, c: cols[i % cols.length], rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 0.4, life: 70 + Math.random() * 30 });
+    var cols = ["#2f7bff", "#19c3ff", "#a855f7", "#2ec28a", "#ffb020"];
+    for (var i = 0; i < 48; i++) {
+      parts.push({ x: innerWidth / 2, y: innerHeight * 0.40, vx: (Math.random() - 0.5) * 9, vy: Math.random() * -10 - 2,
+        g: 0.30 + Math.random() * 0.18, s: 5 + Math.random() * 5, c: cols[i % cols.length], rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 0.4, life: 60 + Math.random() * 26 });
     }
     if (!raf) raf = requestAnimationFrame(tick);
   }

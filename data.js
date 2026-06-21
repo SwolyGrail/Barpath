@@ -510,7 +510,18 @@
     { id: "level-5", name: "Rising Star", icon: "⭐", desc: "Reach level 5." },
     { id: "level-10", name: "Apex", icon: "🚀", desc: "Reach level 10." },
     { id: "makeup-day", name: "No Excuses", icon: "✅", desc: "Log a makeup day." },
-    { id: "explorer", name: "Explorer", icon: "🧭", desc: "Try two different programs." }
+    { id: "explorer", name: "Explorer", icon: "🧭", desc: "Try two different programs." },
+    { id: "streak-14", name: "Fortnight", icon: "📆", desc: "Reach a 14-day streak." },
+    { id: "century", name: "Centurion", icon: "💯", desc: "Log 100 total workouts." },
+    { id: "weekend-warrior", name: "Weekend Warrior", icon: "🏕️", desc: "Train on both Saturday and Sunday in one week." },
+    { id: "early-bird", name: "Early Bird", icon: "🌅", desc: "Finish a workout before 7am." },
+    { id: "night-owl", name: "Night Owl", icon: "🌙", desc: "Finish a workout after 9pm." },
+    { id: "volume-10k", name: "Ten Tonnes", icon: "🏗️", desc: "Lift 10,000 total volume (weight × reps)." },
+    { id: "volume-50k", name: "Workhorse", icon: "🐎", desc: "Lift 50,000 total volume (weight × reps)." },
+    { id: "architect", name: "Architect", icon: "🛠️", desc: "Add a custom exercise to a program day." },
+    { id: "globetrotter", name: "Globetrotter", icon: "🗺️", desc: "Try four different programs." },
+    { id: "comeback", name: "Comeback Kid", icon: "🔄", desc: "Train again after 7+ days off." },
+    { id: "challenger", name: "Challenger", icon: "🎯", desc: "Complete a weekly challenge." }
   ];
 
   /* ---------- weekly challenges (rotate by ISO week) ---------- */
