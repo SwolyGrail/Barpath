@@ -697,7 +697,7 @@
       todayCard +
       statusCard +
       achLine +
-      '<div class="section-head"><h2>Your program</h2><span class="link" data-tab-link="programs">Switch</span></div>' +
+      '<div class="section-head"><h2>Your program</h2><span><button class="link" data-editdays>Edit days</button><span class="muted" style="margin:0 7px">·</span><button class="link" data-tab-link="programs">Switch</button></span></div>' +
       banner +
       '<div class="section-head"><h2>This week</h2></div>' +
       weekRow +
@@ -751,7 +751,8 @@
     }
     return '<div class="weekrow">' + cells + '</div>' +
       '<div class="muted center" style="font-size:var(--f-tiny);margin-top:6px">Tap a training day to preview its session.</div>' +
-      '<button class="btn ghost mt3" id="makeupBtn">+ Log a workout (today or past)</button>';
+      '<div class="row" style="gap:8px;margin-top:12px"><button class="btn ghost" data-editdays>📅 Edit days</button>' +
+      '<button class="btn ghost" id="makeupBtn">+ Log a workout</button></div>';
   }
   function badgesGridHtml() {
     return '<div class="badges">' + D.BADGES.map(function (b) {
@@ -784,6 +785,7 @@
     $$("[data-chartlift]").forEach(function (b) { b.onclick = function () { chartLift = b.dataset.chartlift; render(); }; });
     $$("[data-exhist]").forEach(function (b) { b.onclick = function () { openExerciseHistory(b.dataset.exhist); }; });
     $$("[data-badge]").forEach(function (b) { b.onclick = function () { openBadgeInfo(b.dataset.badge); }; });
+    $$("[data-editdays]").forEach(function (b) { b.onclick = openEditDays; });
   }
   function addSteps() {
     var inp = $("#stepInput"); if (!inp) return;
@@ -1440,6 +1442,35 @@
     $$("[data-pickexp]", $("#sheet")).forEach(function (b) {
       b.onclick = function () { openSwitchDayPicker(goal, days, b.dataset.pickexp); };
     });
+  }
+  function openEditDays() {
+    if (!S.activeProgram) return;
+    var days = activeDays();
+    var sel = sortDows(activeWeekdays()).slice();
+    openSheet('<div class="grip"></div><h3>Training days</h3>' +
+      '<p class="muted" style="font-size:var(--f-small);margin:0 0 10px">Move your ' + days + ' weekly sessions to whichever days suit you. Your program, level, streak and history all stay exactly as they are.</p>' +
+      '<div class="daypick" id="edDayPick">' + dayPickHtml(sel) + '</div>' +
+      '<div class="muted center" id="edDayCount" style="font-size:var(--f-small);margin:12px 0">' + sel.length + ' / ' + days + ' selected</div>' +
+      '<button class="btn primary" id="edDaySave"' + (sel.length === days ? "" : " disabled") + '>Save training days</button>');
+    function refresh() {
+      $$("[data-dow]", $("#sheet")).forEach(function (x) { x.classList.toggle("on", sel.indexOf(+x.dataset.dow) >= 0); });
+      var c = $("#edDayCount"); if (c) c.textContent = sel.length + " / " + days + " selected";
+      var st = $("#edDaySave"); if (st) st.disabled = sel.length !== days;
+    }
+    $$("[data-dow]", $("#sheet")).forEach(function (b) {
+      b.onclick = function () {
+        var dw = +b.dataset.dow, idx = sel.indexOf(dw);
+        if (idx >= 0) sel.splice(idx, 1);
+        else { if (sel.length >= days) { toast("\uD83D\uDCC5", "That's " + days + " already \u2014 deselect one to move it."); return; } sel.push(dw); }
+        refresh();
+      };
+    });
+    $("#edDaySave").onclick = function () {
+      if (sel.length !== days) return;
+      S.activeProgram.weekdays = sortDows(sel);
+      save(); closeSheet(); render();
+      toast("\uD83D\uDCC5", "Training days updated");
+    };
   }
   function openSwitchDayPicker(goal, days, exp) {
     var cur = activeWeekdays();

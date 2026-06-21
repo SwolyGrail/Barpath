@@ -1,6 +1,6 @@
 /* Barpath — service-worker.js
    Offline-first PWA cache. Bump CACHE on any file change. */
-var CACHE = "barpath-v13";
+var CACHE = "barpath-v14";
 var ASSETS = [
   "./",
   "./index.html",
