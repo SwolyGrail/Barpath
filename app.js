@@ -604,10 +604,10 @@
       '</section>';
   }
   function bindOnboardChoice() {
-    $("#onbGuided").onclick = function () { onbMode = "guided"; wiz = { step: 0, goal: null, days: null, exp: null, unit: null }; render(); };
+    $("#onbGuided").onclick = function () { onbMode = "guided"; wiz = { step: 0, goal: null, days: null, weekdays: null, exp: null, unit: null }; render(); };
     $("#onbQuick").onclick = function () { onbMode = "quick"; render(); };
   }
-  var WIZ_TOTAL = 4;
+  var WIZ_TOTAL = 5;
   function renderWizard() {
     var s = wiz.step;
     var dots = "";
@@ -619,12 +619,13 @@
       { label: "4 days", hint: "A solid step up", pick: "days:4" },
       { label: "5 days", hint: "For when you're ready to push", pick: "days:5" }
     ]);
-    else if (s === 2) body = wizQuestion("Have you worked out before?", "This sets your starting intensity.", [
+    else if (s === 2) body = wizDays();
+    else if (s === 3) body = wizQuestion("Have you worked out before?", "This sets your starting intensity.", [
       { label: "I'm new to this", hint: "We'll start gentle", pick: "exp:beginner" },
       { label: "I've trained on and off", hint: "A moderate start", pick: "exp:intermediate" },
       { label: "I train regularly", hint: "Jump right in", pick: "exp:expert" }
     ]);
-    else if (s === 3) body = wizQuestion("Pounds or kilograms?", "How you'd like to log your weights.", [
+    else if (s === 4) body = wizQuestion("Pounds or kilograms?", "How you'd like to log your weights.", [
       { label: "Pounds (lb)", pick: "unit:lb" },
       { label: "Kilograms (kg)", pick: "unit:kg" }
     ]);
@@ -641,8 +642,16 @@
         return '<button class="bigopt" data-wizpick="' + o.pick + '"><span class="bo-txt"><b>' + esc(o.label) + '</b>' + (o.hint ? '<span class="sub">' + esc(o.hint) + '</span>' : "") + '</span><span class="bo-go">' + ICON("arrow") + '</span></button>';
       }).join("");
   }
+  function wizDays() {
+    if (!Array.isArray(wiz.weekdays) || wiz.weekdays.length !== wiz.days) wiz.weekdays = defaultWeekdaysFor(wiz.days);
+    return '<h1 class="h1" style="margin-top:6px">Which days can you train?</h1>' +
+      '<p class="muted" style="margin:6px 0 16px">Pick the ' + wiz.days + ' days that fit your week. Don\u2019t worry — you can change these anytime later.</p>' +
+      '<div class="daypick" id="wizDayPick">' + dayPickHtml(wiz.weekdays) + '</div>' +
+      '<div class="muted center" id="wizDayCount" style="font-size:var(--f-small);margin:14px 0">' + wiz.weekdays.length + ' / ' + wiz.days + ' selected</div>' +
+      '<button class="btn primary" id="wizDayNext"' + (wiz.weekdays.length === wiz.days ? "" : " disabled") + '>Continue</button>';
+  }
   function wizSummary() {
-    var g = D.GOALS[wiz.goal], wd = defaultWeekdaysFor(wiz.days);
+    var g = D.GOALS[wiz.goal], wd = sortDows(wiz.weekdays || defaultWeekdaysFor(wiz.days));
     var split = D.PROGRAMS[wiz.goal].splitName[wiz.days];
     var dayList = wd.map(function (d) { return DOW[d]; }).join(", ");
     return '<div class="onb-badge">' + avatarSVG("fullbody") + '</div>' +
@@ -664,13 +673,30 @@
       b.onclick = function () {
         var p = b.dataset.wizpick.split(":"), key = p[0], val = p[1];
         wiz[key] = (key === "days") ? +val : val;
+        if (key === "days") wiz.weekdays = defaultWeekdaysFor(+val);
         wiz.step++; render();
       };
     });
+    if (wiz.step === 2) {
+      var refresh = function () {
+        $$("[data-dow]", $("#wizDayPick")).forEach(function (x) { x.classList.toggle("on", wiz.weekdays.indexOf(+x.dataset.dow) >= 0); });
+        var c = $("#wizDayCount"); if (c) c.textContent = wiz.weekdays.length + " / " + wiz.days + " selected";
+        var n = $("#wizDayNext"); if (n) n.disabled = wiz.weekdays.length !== wiz.days;
+      };
+      $$("[data-dow]", $("#wizDayPick")).forEach(function (b) {
+        b.onclick = function () {
+          var dw = +b.dataset.dow, idx = wiz.weekdays.indexOf(dw);
+          if (idx >= 0) wiz.weekdays.splice(idx, 1);
+          else { if (wiz.weekdays.length >= wiz.days) { toast("📅", "That's " + wiz.days + " already — deselect one to swap it."); return; } wiz.weekdays.push(dw); }
+          refresh();
+        };
+      });
+      var dn = $("#wizDayNext"); if (dn) dn.onclick = function () { if (wiz.weekdays.length !== wiz.days) return; wiz.weekdays = sortDows(wiz.weekdays); wiz.step++; render(); };
+    }
     var ws = $("#wizStart"); if (ws) ws.onclick = function () {
       draft.unit = wiz.unit; draft.prs = {};
       onbMode = null;
-      startProgram(wiz.goal, wiz.days, wiz.exp, defaultWeekdaysFor(wiz.days));
+      startProgram(wiz.goal, wiz.days, wiz.exp, sortDows(wiz.weekdays || defaultWeekdaysFor(wiz.days)));
       wiz = null;
     };
   }
