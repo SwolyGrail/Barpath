@@ -1,43 +1,142 @@
-<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+<title>Barpath — Attack the Bar. Own the Path.</title>
+<meta name="description" content="A premium offline workout tracker with periodized programs, PRs, streaks and XP." />
+<meta name="theme-color" content="#000000" />
+
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+
+<!-- iOS standalone install -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Barpath" />
+
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- Shared SVG gradient definitions referenced by styles.css (rings + muscle avatars) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
   <defs>
-    <linearGradient id="bp" x1="120" y1="80" x2="392" y2="432" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#2f7bff"/>
-      <stop offset="1" stop-color="#19c3ff"/>
+    <linearGradient id="ringgrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="var(--accent)" />
+      <stop offset="1" stop-color="var(--accent-2)" />
     </linearGradient>
-    <radialGradient id="glow" cx="0.5" cy="0.36" r="0.75">
-      <stop offset="0" stop-color="#123" stop-opacity="0.95"/>
-      <stop offset="0.55" stop-color="#0a0a0c" stop-opacity="0"/>
-    </radialGradient>
-    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="7"/>
-    </filter>
+    <linearGradient id="avgrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="var(--accent)" />
+      <stop offset="1" stop-color="var(--accent-2)" />
+    </linearGradient>
   </defs>
-
-  <!-- tile -->
-  <rect x="0" y="0" width="512" height="512" rx="116" fill="#0a0a0c"/>
-  <rect x="0" y="0" width="512" height="512" rx="116" fill="url(#glow)"/>
-
-  <!-- soft glow underlay of the path -->
-  <g opacity="0.55" filter="url(#soft)">
-    <path d="M232 100 C 360 156 360 214 256 256 C 152 298 152 358 282 414"
-          fill="none" stroke="url(#bp)" stroke-width="40" stroke-linecap="round"/>
-  </g>
-
-  <!-- the bar path -->
-  <path d="M232 100 C 360 156 360 214 256 256 C 152 298 152 358 282 414"
-        fill="none" stroke="url(#bp)" stroke-width="36" stroke-linecap="round"/>
-
-  <!-- plate / ring riding the path (upper) -->
-  <g>
-    <circle cx="330" cy="178" r="50" fill="#0a0a0c"/>
-    <circle cx="330" cy="178" r="50" fill="none" stroke="url(#bp)" stroke-width="17"/>
-    <circle cx="330" cy="178" r="15" fill="none" stroke="url(#bp)" stroke-width="11"/>
-  </g>
-
-  <!-- plate / ring riding the path (lower) -->
-  <g>
-    <circle cx="182" cy="336" r="50" fill="#0a0a0c"/>
-    <circle cx="182" cy="336" r="50" fill="none" stroke="url(#bp)" stroke-width="17"/>
-    <circle cx="182" cy="336" r="15" fill="none" stroke="url(#bp)" stroke-width="11"/>
-  </g>
 </svg>
+
+<div id="app">
+  <!-- Top bar -->
+  <header class="topbar">
+    <img class="mark" src="logo.svg" alt="Barpath logo" />
+    <div class="titles">
+      <div class="wordmark">Barpath</div>
+      <div class="subtitle" id="topSubtitle">Attack the Bar. Own the Path.</div>
+    </div>
+    <button class="iconbtn" id="shareBtn" aria-label="Share progress" title="Share">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle>
+        <line x1="8.6" y1="13.5" x2="15.4" y2="17.5"></line><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"></line>
+      </svg>
+    </button>
+    <button class="level-chip" id="levelChip" aria-label="Level and experience">
+      <span class="lvnum" id="lvNum">1</span>
+      <span class="xpwrap">
+        <span class="lvtitle" id="lvTitle">Rookie</span>
+        <span class="xpbar"><i id="lvXpFill" style="width:0%"></i></span>
+      </span>
+    </button>
+  </header>
+
+  <!-- View container — JS swaps content here -->
+  <main id="view" role="main"></main>
+
+  <!-- Bottom navigation -->
+  <nav class="tabbar" id="tabbar" aria-label="Primary">
+    <button class="tab on" data-tab="home" aria-label="Home">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"></path><path d="M5 10v10h14V10"></path></svg>
+      <span>Home</span>
+    </button>
+    <button class="tab" data-tab="train" aria-label="Train">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5l11 11"></path><path d="M4 8l-1.5 1.5a1.4 1.4 0 0 0 0 2L6 15M20 16l1.5-1.5a1.4 1.4 0 0 0 0-2L18 9M8 4l1.5-1.5a1.4 1.4 0 0 1 2 0L15 6M16 20l-1.5 1.5a1.4 1.4 0 0 1-2 0L9 18"></path></svg>
+      <span>Train</span>
+    </button>
+    <button class="tab" data-tab="stats" aria-label="Stats">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"></path><rect x="5" y="11" width="3.4" height="7" rx="1"></rect><rect x="10.3" y="7" width="3.4" height="11" rx="1"></rect><rect x="15.6" y="13" width="3.4" height="5" rx="1"></rect></svg>
+      <span>Stats</span>
+    </button>
+    <button class="tab" data-tab="programs" aria-label="Programs">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M4 9h16M9 9v11"></path></svg>
+      <span>Programs</span>
+    </button>
+    <button class="tab" data-tab="guide" aria-label="Guide">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h12v17H6a2 2 0 0 0-2 2z"></path><path d="M20 20H6a2 2 0 0 0-2 2"></path></svg>
+      <span>Guide</span>
+    </button>
+  </nav>
+</div>
+
+<!-- Rest-timer floating button + panel -->
+<button class="fab-timer hidden" id="fabTimer" aria-label="Rest timer">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"></circle><path d="M12 13V9M12 5V3M9 3h6"></path></svg>
+</button>
+<div class="timer-panel" id="timerPanel" role="dialog" aria-label="Rest timer"></div>
+
+<!-- Overlays -->
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
+<div id="toasts" aria-live="polite"></div>
+<div id="levelup" role="dialog" aria-modal="true"></div>
+<div id="tutorial" role="dialog" aria-modal="true" aria-label="How Barpath works"></div>
+<canvas id="confetti"></canvas>
+
+<script>
+  /* Capture any load/parse error before the app starts, so a blank screen
+     can be turned into a readable diagnostic. */
+  window.__bp_err = null;
+  window.addEventListener("error", function (e) {
+    if (window.__bp_err) return;
+    if (e && e.message) {
+      window.__bp_err = e.message + (e.filename ? "  [" + String(e.filename).split("/").pop() + (e.lineno ? ":" + e.lineno : "") + "]" : "");
+    } else if (e && e.target && e.target.src) {
+      window.__bp_err = "Failed to load: " + String(e.target.src).split("/").pop();
+    }
+  }, true);
+</script>
+<script src="data.js"></script>
+<script src="app.js"></script>
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("service-worker.js").catch(function () {});
+    });
+  }
+  /* Watchdog: if the app never reported a successful boot, show what we know. */
+  setTimeout(function () {
+    if (window.__BARPATH_BOOTED__) return;
+    var v = document.getElementById("view");
+    if (!v || v.innerHTML.trim().length > 0) return;
+    v.innerHTML =
+      '<div style="padding:24px;color:#fff;font:15px/1.55 system-ui,-apple-system,sans-serif">' +
+      '<h2 style="margin:0 0 8px;font-size:20px">Barpath couldn\u2019t start</h2>' +
+      '<p style="color:#9aa3b2;margin:0 0 14px">The app didn\u2019t finish loading. Please share these details:</p>' +
+      '<pre style="white-space:pre-wrap;word-break:break-word;background:#0e1116;border:1px solid #2a2f3a;border-radius:12px;padding:14px;color:#7fe0c8;font-size:12px">' +
+      "data.js loaded: " + (!!window.BARPATH_DATA) + "\n" +
+      "app booted: " + (!!window.__BARPATH_BOOTED__) + "\n" +
+      "error: " + (window.__bp_err || "(none captured)") + "\n" +
+      "userAgent: " + navigator.userAgent +
+      '</pre></div>';
+  }, 1600);
+</script>
+</body>
+</html>
