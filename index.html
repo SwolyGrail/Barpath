@@ -181,7 +181,7 @@
   (function () {
     var s = document.getElementById("splash"); if (!s) return;
     var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    var MIN = reduce ? 450 : 1350, MAX = 4000, start = Date.now(), done = false;
+    var MIN = reduce ? 700 : 2500, MAX = 5000, start = Date.now(), done = false;
     function hide() {
       if (done) return; done = true;
       s.classList.add("hide");
