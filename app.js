@@ -48,7 +48,8 @@
       history: [], programsTried: {}, prs: {}, steps: {}, stepGoal: 8000,
       progress: {}, claimedChallenges: {}, swaps: {}, unit: "kg", customLifts: [],
       xpLog: {}, exerciseHistory: {}, autoRest: true, dayMods: {}, tutorialSeen: false,
-      customPrograms: {}, customExercises: []
+      customPrograms: {}, customExercises: [], bwHintDismissed: false,
+      profile: { sex: null, age: null, height: null, weight: null }
     };
   }
   function migrate(s) {
@@ -75,8 +76,10 @@
     if (typeof s.autoRest !== "boolean") s.autoRest = true;
     if (!s.dayMods || typeof s.dayMods !== "object") s.dayMods = {};
     if (typeof s.tutorialSeen !== "boolean") s.tutorialSeen = false;
+    if (typeof s.bwHintDismissed !== "boolean") s.bwHintDismissed = false;
     if (!s.customPrograms || typeof s.customPrograms !== "object") s.customPrograms = {};
     if (!Array.isArray(s.customExercises)) s.customExercises = [];
+    if (!s.profile || typeof s.profile !== "object") s.profile = { sex: null, age: null, height: null, weight: null };
     // migrate positional slot keys -> stable "b"+index ids (entries + swaps)
     if (!s._sidMigrated) {
       try {
@@ -1116,6 +1119,7 @@
     var doneCount = effective.filter(function (o) { return ds.entries[o.sid] && ds.entries[o.sid].done; }).length;
     var pct = effective.length ? Math.round(doneCount / effective.length * 100) : 0;
     var started = isStarted(ds);
+    _bwHintUsed = false; // show the bodyweight hint at most once per render
 
     var cards = slots.map(function (o) { return exerciseCard(o.sid, o.slot, !started); }).join("");
 
@@ -1204,16 +1208,29 @@
 
     // main / pool / custom — per-set weight & reps logging
     var sets = setsFor(entry);
+    var bwVal = isBwName(r.name) ? bodyWeightInUnit() : 0;
+    var wPlace = bwVal > 0 ? ("BW " + Math.round(bwVal)) : unitLabel();
+    var bwHint = "";
+    if (isBwName(r.name) && bwVal === 0 && !S.bwHintDismissed && !_bwHintUsed) {
+      _bwHintUsed = true;
+      bwHint = '<div class="bw-hint"><span>💡 Add your bodyweight in <b>Your details</b> so moves like ' + esc(r.name) + ' count toward your volume.</span>' +
+        '<div class="bw-hint-row"><button class="btn ghost sm" data-bwadd="1">Add it</button>' +
+        '<button class="bw-hint-x" data-bwx="1" aria-label="Dismiss">Not now</button></div></div>';
+    }
+    var rowCount = Math.max(r.sets, sets.length);
     var setRows = "";
-    for (var k = 0; k < r.sets; k++) {
+    for (var k = 0; k < rowCount; k++) {
       var sv = sets[k] || { w: "", r: "" };
+      var extra = k >= r.sets;
       setRows += '<div class="setrow">' +
-        '<span class="setn">' + (k + 1) + '</span>' +
-        '<input class="fld setfld" inputmode="decimal" data-setw="' + sid + '" data-k="' + k + '" value="' + esc(sv.w) + '" placeholder="' + unitLabel() + '" />' +
+        '<span class="setn">' + (k + 1) + (extra ? '<i class="setx-tag">+</i>' : '') + '</span>' +
+        '<input class="fld setfld" inputmode="decimal" data-setw="' + sid + '" data-k="' + k + '" value="' + esc(sv.w) + '" placeholder="' + esc(wPlace) + '" />' +
         '<input class="fld setfld" inputmode="numeric" data-setr="' + sid + '" data-k="' + k + '" value="' + esc(sv.r) + '" placeholder="' + esc(r.reps) + '" />' +
+        (extra ? '<button class="setrm" data-setrm="' + sid + '" data-k="' + k + '" aria-label="Remove set">✕</button>' : '<span class="setrm-sp"></span>') +
         '</div>';
     }
-    var setlog = '<div class="setlog"><div class="setrow head"><span class="setn">Set</span><span>Weight</span><span>Reps</span></div>' + setRows + '</div>';
+    setRows += '<button class="addset" data-addset="' + sid + '">+ Add set</button>';
+    var setlog = '<div class="setlog"><div class="setrow head"><span class="setn">Set</span><span>Weight</span><span>Reps</span><span class="setrm-sp"></span></div>' + setRows + '</div>';
     var lp = lastExercisePerf(r.name);
     var lastLine = lp ? '<div class="ex-last">Last · ' + esc(shortDate(lp.date)) + ': <b>' + esc(lastTopStr(lp)) + '</b></div>' : '';
 
@@ -1225,6 +1242,7 @@
 
     return '<div class="ex' + (done ? " done" : "") + (entry.open ? " open" : "") + '" data-ex="' + sid + '">' + top +
       '<div class="ex-body"><div class="ex-body-inner">' +
+      bwHint +
       lastLine +
       setlog +
       '<label class="fldlbl" style="margin-top:12px">Notes</label><textarea class="fld" rows="2" data-notes="' + sid + '" placeholder="RPE, tempo, cues…">' + esc(entry.notes || "") + '</textarea>' +
@@ -1245,16 +1263,69 @@
     return best;
   }
   /* ---- per-exercise history (powers "last time" + trends) ---- */
+  function repsNum(repsStr) { var m = ("" + (repsStr || "")).match(/\d+/); return m ? parseInt(m[0], 10) : null; }
+  /* ---- body profile + strength standards (vs general population) ---- */
+  // bodyweight-multiple thresholds per lift: [novice, intermediate, advanced, elite]
+  var STD_M = { bench: [0.75, 1.0, 1.5, 2.0], squat: [1.0, 1.25, 1.75, 2.25], deadlift: [1.25, 1.5, 2.0, 2.5], ohp: [0.5, 0.7, 0.9, 1.1], row: [0.75, 1.0, 1.25, 1.5] };
+  var STD_F = { bench: [0.4, 0.6, 0.9, 1.2], squat: [0.6, 0.9, 1.3, 1.7], deadlift: [0.75, 1.1, 1.5, 2.0], ohp: [0.3, 0.45, 0.65, 0.85], row: [0.4, 0.6, 0.8, 1.05] };
+  var STD_LIFTS = [{ id: "bench", name: "Bench Press" }, { id: "squat", name: "Back Squat" }, { id: "deadlift", name: "Deadlift" }, { id: "ohp", name: "Overhead Press" }, { id: "row", name: "Barbell Row" }];
+  var STD_LEVELS = [
+    { name: "Beginner", pct: 10 }, { name: "Novice", pct: 30 }, { name: "Intermediate", pct: 55 },
+    { name: "Advanced", pct: 80 }, { name: "Elite", pct: 95 }
+  ];
+  function toKg(v) { return S.unit === "lb" ? v * 0.453592 : v; }
+  function profileBodyKg() { var p = S.profile || {}; return (p.weight > 0) ? p.weight : null; }
+  function hasProfile() { var p = S.profile || {}; return !!(p.weight > 0); }
+  function bodyWeightInUnit() { var p = S.profile || {}; var kg = parseFloat(p.weight); if (!(kg > 0)) return 0; return S.unit === "lb" ? kg / 0.453592 : kg; }
+  var _bwNames = null;
+  var _bwHintUsed = false;
+  function isBwName(name) { if (!_bwNames) { _bwNames = {}; (D.EXERCISE_LIBRARY || []).forEach(function (e) { if (e.bw) _bwNames[e.name] = true; }); } return !!_bwNames[name]; }
+  // returns {ratio, levelIdx, level, pct} for a lift id, or null if no PR/bodyweight
+  function strengthLevel(liftId) {
+    var bw = profileBodyKg(); if (!bw) return null;
+    var pr = S.prs && S.prs[liftId];
+    if (!pr || pr.seeded || !(pr.value > 0)) return null;
+    var ratio = toKg(pr.value) / bw;
+    var tbl = (S.profile.sex === "female") ? STD_F : STD_M;
+    var th = tbl[liftId]; if (!th) return null;
+    var idx = 0; for (var i = 0; i < th.length; i++) if (ratio >= th[i]) idx = i + 1;
+    return { ratio: ratio, levelIdx: idx, level: STD_LEVELS[idx].name, pct: STD_LEVELS[idx].pct };
+  }
+  function sessionVolume(dayIdx) {
+    var ds = dayState(dayIdx), total = 0;
+    daySlots(dayIdx).forEach(function (o) {
+      var slot = o.slot; if (slot.t === "warmup" || slot.t === "cardio") return;
+      var entry = ds.entries[o.sid]; if (!entry || entry.skipped) return;
+      var r = resolveSlot(slot, dayIdx, o.sid), pres = repsNum(r.reps);
+      var bw = isBwName(r.name) ? bodyWeightInUnit() : 0;
+      setsFor(entry).forEach(function (s) {
+        var w = parseFloat(s.w); if (!(w > 0)) w = bw; if (!(w > 0)) return;
+        var reps = parseInt(s.r, 10); if (!reps && pres) reps = pres;
+        total += w * (reps || 0);
+      });
+    });
+    return Math.round(total);
+  }
   function recordExercisePerf(date) {
     var ds = dayState(workoutDayIdx);
     daySlots(workoutDayIdx).forEach(function (o) {
       var slot = o.slot;
       if (slot.t === "warmup" || slot.t === "cardio") return;
       var entry = ds.entries[o.sid]; if (!entry || entry.skipped) return;
-      var clean = setsFor(entry).filter(function (s) { return parseFloat(s.w) > 0; }).map(function (s) { return { w: s.w, r: s.r || "" }; });
+      var r = resolveSlot(slot, workoutDayIdx, o.sid), pres = repsNum(r.reps);
+      var bw = isBwName(r.name) ? bodyWeightInUnit() : 0;
+      var clean = setsFor(entry).map(function (s) {
+        var w = parseFloat(s.w);
+        if (!(w > 0)) { if (bw > 0) w = bw; else return null; }
+        var reps = ("" + (s.r || "")).trim();
+        if (!reps && pres) reps = "" + pres; // fall back to prescribed reps so volume is accurate
+        return { w: "" + w, r: reps };
+      }).filter(Boolean);
       if (!clean.length) return;
-      var r = resolveSlot(slot, workoutDayIdx, o.sid), top = bestSet(entry);
+      var top = bestSet(entry);
       if (!S.exerciseHistory[r.name]) S.exerciseHistory[r.name] = [];
+      // replace any prior workout entry for this exercise on the same day (prevents double-count on re-finish)
+      S.exerciseHistory[r.name] = S.exerciseHistory[r.name].filter(function (e) { return !(e.date === date && !e.pr); });
       S.exerciseHistory[r.name].push({ date: date, sets: clean, top: top ? top.w : null, reps: top ? top.r : "" });
       if (S.exerciseHistory[r.name].length > 40) S.exerciseHistory[r.name] = S.exerciseHistory[r.name].slice(-40);
     });
@@ -1376,6 +1447,10 @@
     $$('.ex-body input, .ex-body textarea, .ex-body select, .ex-tools').forEach(function (el) {
       el.addEventListener('click', function (e) { e.stopPropagation(); });
     });
+    $$("[data-addset]").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); addSet(b.dataset.addset); }; });
+    $$("[data-bwadd]").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); openProfileEditor(); }; });
+    $$("[data-bwx]").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); S.bwHintDismissed = true; save(); render(); }; });
+    $$("[data-setrm]").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); removeSet(b.dataset.setrm, +b.dataset.k); }; });
     var fb = $("#finishBtn"); if (fb) fb.onclick = finishWorkout;
     var pb = $("#printBtn"); if (pb) pb.onclick = function () { window.print(); };
     var rb = $("#resetBtn"); if (rb) rb.onclick = resetDay;
@@ -1402,6 +1477,21 @@
     while (e.sets.length <= k) e.sets.push({ w: "", r: "" });
     e.sets[k][field] = v;
     save();
+  }
+  function addSet(sid) {
+    var e = ensureEntry(sid);
+    if (!Array.isArray(e.sets)) e.sets = setsFor(e).slice();
+    var prescribed = 0, slot = slotBySid(workoutDayIdx, sid);
+    if (slot) { var r = resolveSlot(slot, workoutDayIdx, sid); prescribed = r.sets || 0; }
+    var target = Math.max(prescribed, e.sets.length) + 1;
+    while (e.sets.length < target) e.sets.push({ w: "", r: "" });
+    e.open = true; save(); render();
+  }
+  function removeSet(sid, k) {
+    var e = ensureEntry(sid);
+    if (!Array.isArray(e.sets)) e.sets = setsFor(e).slice();
+    if (k >= 0 && k < e.sets.length) e.sets.splice(k, 1);
+    e.open = true; save(); render();
   }
   function ensureEntry(sid) {
     var ds = dayState(workoutDayIdx);
@@ -1569,7 +1659,8 @@
     if (gap >= 7) earn("comeback");
     checkBadges();
     save(); burst();
-    toast("✅", "Workout logged. +" + D.XP.workout + " XP");
+    var vol = sessionVolume(workoutDayIdx);
+    toast("✅", vol > 0 ? "Logged · " + vol.toLocaleString() + " " + unitLabel() + " volume · +" + D.XP.workout + " XP" : "Workout logged. +" + D.XP.workout + " XP");
     go("home");
   }
   function resetDay() {
@@ -2005,6 +2096,7 @@
     var m = {};
     Object.keys(S.exerciseHistory || {}).forEach(function (nm) {
       (S.exerciseHistory[nm] || []).forEach(function (e) {
+        if (e.pr) return;
         var v = 0; (e.sets || []).forEach(function (s) { v += (parseFloat(s.w) || 0) * (parseInt(s.r, 10) || 0); });
         m[e.date] = (m[e.date] || 0) + v;
       });
@@ -2079,9 +2171,76 @@
     return '<section class="view">' +
       '<div class="eyebrow">' + esc(goalName()) + '</div><h1 class="h1">Your stats</h1>' +
       tiles + gauges + lvl +
+      strengthCompareCard() +
       '<div class="section-head"><h2>Trends</h2></div>' +
       workoutsChart + volChart + strength +
       '</section>';
+  }
+  function strengthCompareCard() {
+    if (!hasProfile()) {
+      return '<div class="section-head"><h2>How you compare</h2></div>' +
+        '<div class="card"><p class="muted" style="font-size:var(--f-small);margin:0 0 12px">Add your sex, height, weight and age to see how your lifts stack up against the general population — a bit of fun on top of your numbers.</p>' +
+        '<button class="btn ghost sm" id="addProfileStats">Add your details</button></div>';
+    }
+    var rows = STD_LIFTS.map(function (l) {
+      var r = strengthLevel(l.id);
+      if (!r) return '<div class="cmp-row"><div class="cmp-top"><span class="cmp-name">' + esc(l.name) + '</span><span class="muted" style="font-size:var(--f-tiny)">Log a PR to compare</span></div></div>';
+      return '<div class="cmp-row"><div class="cmp-top"><span class="cmp-name">' + esc(l.name) + '</span>' +
+        '<span class="cmp-lvl lvl' + r.levelIdx + '">' + r.level + '</span></div>' +
+        '<div class="cmp-bar"><i style="width:' + r.pct + '%"></i></div>' +
+        '<div class="cmp-meta"><span>' + r.ratio.toFixed(2) + '× bodyweight</span><span>stronger than ~' + r.pct + '%</span></div></div>';
+    }).join("");
+    return '<div class="section-head"><h2>How you compare</h2></div>' +
+      '<div class="card">' + rows +
+      '<p class="muted" style="font-size:var(--f-tiny);margin:10px 0 0">Estimates from bodyweight-relative strength standards for your sex — just for fun, not medical or coaching advice.</p></div>';
+  }
+  function profileCard() {
+    var p = S.profile || {};
+    var has = p.sex || p.age || p.height || p.weight;
+    var hgt = p.height ? (S.unit === "lb" ? cmToFtIn(p.height) : p.height + " cm") : "—";
+    var wgt = (p.weight > 0) ? (weightDisp(p.weight) + " " + unitLabel()) : "—";
+    var body = has ?
+      ('<div class="sumrow"><span class="muted">Sex</span><b>' + (p.sex ? cap(p.sex) : "—") + '</b></div>' +
+        '<div class="sumrow"><span class="muted">Age</span><b>' + (p.age || "—") + '</b></div>' +
+        '<div class="sumrow"><span class="muted">Height</span><b>' + hgt + '</b></div>' +
+        '<div class="sumrow"><span class="muted">Weight</span><b>' + wgt + '</b></div>') :
+      '<p class="muted" style="font-size:var(--f-small);margin:0 0 12px">Optional, stored only on this device. Unlocks the strength comparison on your Stats tab.</p>';
+    return '<div class="card">' + body +
+      '<button class="btn ghost sm" id="editProfile" style="margin-top:' + (has ? "12px" : "0") + '">' + (has ? "Edit details" : "Add your details") + '</button></div>';
+  }
+  function cap(s) { return ("" + s).charAt(0).toUpperCase() + ("" + s).slice(1); }
+  function weightDisp(kg) { return S.unit === "lb" ? Math.round(kg / 0.453592) : Math.round(kg * 10) / 10; }
+  function cmToFtIn(cm) { var t = cm / 2.54, ft = Math.floor(t / 12), inch = Math.round(t - ft * 12); if (inch === 12) { ft++; inch = 0; } return ft + "'" + inch + '"'; }
+  function openProfileEditor() {
+    var p = S.profile || {};
+    var heightField = (S.unit === "lb") ?
+      ('<div class="row" style="gap:8px"><div style="flex:1"><label class="fldlbl">Height (ft)</label><input class="fld" id="pHeightFt" inputmode="numeric" value="' + (p.height ? Math.floor(p.height / 2.54 / 12) : "") + '" placeholder="5"></div>' +
+        '<div style="flex:1"><label class="fldlbl">Height (in)</label><input class="fld" id="pHeightIn" inputmode="numeric" value="' + (p.height ? Math.round(p.height / 2.54 - Math.floor(p.height / 2.54 / 12) * 12) : "") + '" placeholder="10"></div></div>') :
+      ('<label class="fldlbl">Height (cm)</label><input class="fld" id="pHeightCm" inputmode="numeric" value="' + (p.height || "") + '" placeholder="178">');
+    var html = '<div class="grip"></div><h3>Your details</h3>' +
+      '<p class="muted" style="font-size:var(--f-small);margin:0 0 14px">All optional, kept only on this device. Used to compare your lifts to typical strength levels.</p>' +
+      '<label class="fldlbl">Sex</label><div class="segment" id="pSex"><button class="' + (p.sex === "male" ? "on" : "") + '" data-psex="male">Male</button><button class="' + (p.sex === "female" ? "on" : "") + '" data-psex="female">Female</button></div>' +
+      '<div class="muted" style="font-size:var(--f-tiny);margin:6px 0 14px">Used only to pick the right strength reference table.</div>' +
+      '<label class="fldlbl">Age</label><input class="fld" id="pAge" inputmode="numeric" value="' + (p.age || "") + '" placeholder="30">' +
+      '<div style="margin-top:12px">' + heightField + '</div>' +
+      '<label class="fldlbl" style="margin-top:12px">Weight (' + unitLabel() + ')</label><input class="fld" id="pWeight" inputmode="decimal" value="' + (p.weight > 0 ? weightDisp(p.weight) : "") + '" placeholder="' + (S.unit === "lb" ? "175" : "80") + '">' +
+      '<div class="row" style="gap:8px;margin-top:16px"><button class="btn primary" id="pSave">Save</button><button class="btn ghost" id="pClear">Clear</button></div>';
+    openSheet(html);
+    var sex = p.sex;
+    $$("[data-psex]").forEach(function (b) { b.onclick = function () { sex = b.dataset.psex; $$("[data-psex]").forEach(function (x) { x.classList.toggle("on", x.dataset.psex === sex); }); }; });
+    $("#pSave").onclick = function () {
+      var age = parseInt(($("#pAge") || {}).value, 10); age = (age > 0 && age < 120) ? age : null;
+      var heightCm = null;
+      if (S.unit === "lb") {
+        var ft = parseInt(($("#pHeightFt") || {}).value, 10) || 0, inch = parseInt(($("#pHeightIn") || {}).value, 10) || 0;
+        if (ft || inch) heightCm = Math.round((ft * 12 + inch) * 2.54);
+      } else { var cm = parseInt(($("#pHeightCm") || {}).value, 10); if (cm > 0) heightCm = cm; }
+      var wv = parseFloat(($("#pWeight") || {}).value); var weightKg = (wv > 0) ? (S.unit === "lb" ? wv * 0.453592 : wv) : null;
+      if (weightKg) weightKg = Math.round(weightKg * 10) / 10;
+      S.profile = { sex: sex || null, age: age, height: heightCm, weight: weightKg };
+      save(); closeSheet(); render(); toast("✅", "Details saved");
+    };
+    $("#pClear").onclick = function () { S.profile = { sex: null, age: null, height: null, weight: null }; save(); closeSheet(); render(); toast("🗑️", "Details cleared"); };
   }
   function statTile(icon, num, label) {
     return '<div class="stat-tile"><div class="st-ic">' + icon + '</div><div class="st-num">' + num + '</div><div class="st-lbl">' + esc(label) + '</div></div>';
@@ -2089,6 +2248,7 @@
   function bindStats() {
     $$("[data-chartlift]").forEach(function (b) { b.onclick = function () { chartLift = b.dataset.chartlift; render(); }; });
     $$("[data-exhist]").forEach(function (b) { b.onclick = function () { openExerciseHistory(b.dataset.exhist); }; });
+    var ap = $("#addProfileStats"); if (ap) ap.onclick = openProfileEditor;
   }
 
 
@@ -2153,6 +2313,8 @@
       '<div class="setting-row" style="margin-top:16px"><div><div style="font-weight:600">Auto rest timer</div>' +
       '<div class="muted" style="font-size:var(--f-small)">Start a rest countdown when you complete an exercise.</div></div>' +
       '<button class="toggle' + (S.autoRest ? " on" : "") + '" id="autoRestToggle" role="switch" aria-checked="' + (S.autoRest ? "true" : "false") + '"><span class="knob"></span></button></div></div>' +
+      '<div class="section-head"><h2>Your details</h2></div>' +
+      profileCard() +
       '<div class="section-head"><h2>Your data</h2></div>' +
       '<div class="card"><p class="muted" style="font-size:var(--f-small);margin:0 0 14px">Everything is stored only on this device. Back it up so you don\u2019t lose your history.</p>' +
       '<div class="row" style="gap:8px"><button class="btn ghost sm" id="exportData">⬇ Export backup</button>' +
@@ -2171,6 +2333,7 @@
     $$("[data-histidx]").forEach(function (b) { b.onclick = function () { openWorkoutEntry(+b.dataset.histidx); }; });
     $$("[data-gunit]").forEach(function (b) { b.onclick = function () { S.unit = b.dataset.gunit; save(); render(); toast("⚖️", "Units set to " + unitLabel()); }; });
     var art = $("#autoRestToggle"); if (art) art.onclick = function () { S.autoRest = !S.autoRest; save(); render(); toast(S.autoRest ? "⏱️" : "⏱️", "Auto rest timer " + (S.autoRest ? "on" : "off")); };
+    var ep = $("#editProfile"); if (ep) ep.onclick = openProfileEditor;
     var rt = $("#replayTutorial"); if (rt) rt.onclick = function () { openTutorial(0, true); };
     $$("[data-badge]").forEach(function (b) { b.onclick = function () { openBadgeInfo(b.dataset.badge); }; });
     var ex = $("#exportData"); if (ex) ex.onclick = exportData;
@@ -2212,7 +2375,7 @@
     if (prev && val <= prev.value) { toast("💪", "Your " + nm + " PR is still " + prev.value + " " + unitLabel() + "."); return; }
     S.prs[id] = { value: val, date: date || todayYmd(), reps: reps || "", seeded: false };
     if (!S.exerciseHistory[nm]) S.exerciseHistory[nm] = [];
-    S.exerciseHistory[nm].push({ date: date || todayYmd(), sets: [{ w: "" + val, r: reps || "" }], top: val, reps: reps || "" });
+    S.exerciseHistory[nm].push({ date: date || todayYmd(), sets: [{ w: "" + val, r: reps || "" }], top: val, reps: reps || "", pr: true });
     if (S.exerciseHistory[nm].length > 40) S.exerciseHistory[nm] = S.exerciseHistory[nm].slice(-40);
     awardXp(D.XP.pr, false);
     earn("first-pr");
@@ -2279,6 +2442,14 @@
     // if it was today's normal completion for the active program, clear that day's checkmarks
     if (!h.makeup && h.date === todayYmd() && h.programId === programId(S.activeProgram)) {
       var b = progBucket(); if (b && b[h.dayIdx]) { b[h.dayIdx] = { done: false, finishedAt: null, started: false, startedAt: null, entries: {} }; }
+    }
+    // drop that day's logged sets so volume/trends stay in sync (keep PR-log entries)
+    var stillTrained = S.history.some(function (x) { return x.date === h.date; });
+    if (!stillTrained) {
+      Object.keys(S.exerciseHistory || {}).forEach(function (nm) {
+        S.exerciseHistory[nm] = S.exerciseHistory[nm].filter(function (e) { return !(e.date === h.date && !e.pr); });
+        if (!S.exerciseHistory[nm].length) delete S.exerciseHistory[nm];
+      });
     }
     recomputeStreak(true);
     save(); render(); toast("🗑️", "Workout entry removed");
@@ -2386,6 +2557,7 @@
     var v = 0;
     Object.keys(S.exerciseHistory || {}).forEach(function (n) {
       (S.exerciseHistory[n] || []).forEach(function (e) {
+        if (e.pr) return;
         (e.sets || []).forEach(function (s) { var w = parseFloat(s.w) || 0, r = parseInt(s.r, 10) || 0; v += w * r; });
       });
     });

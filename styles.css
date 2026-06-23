@@ -267,6 +267,20 @@ button.link:active { opacity: .6; }
 .mm-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: -1px; margin-right: 4px; }
 .mm-lg-p { background: linear-gradient(180deg, #2f7bff, #19c3ff); }
 .mm-lg-s { background: linear-gradient(180deg, #12e0a0, #5bf3c4); }
+/* strength comparison */
+.cmp-row { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.cmp-row:last-of-type { border-bottom: 0; }
+.cmp-top { display: flex; justify-content: space-between; align-items: center; }
+.cmp-name { font-weight: 700; font-size: var(--f-base); }
+.cmp-lvl { font-size: var(--f-tiny); font-weight: 800; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: .04em; }
+.cmp-lvl.lvl0 { background: #2a3038; color: #9aa0ad; }
+.cmp-lvl.lvl1 { background: rgba(91,243,196,.16); color: #5bf3c4; }
+.cmp-lvl.lvl2 { background: rgba(25,195,255,.16); color: #19c3ff; }
+.cmp-lvl.lvl3 { background: rgba(47,123,255,.18); color: #6ea8ff; }
+.cmp-lvl.lvl4 { background: linear-gradient(90deg, #2f7bff, #19c3ff); color: #061018; }
+.cmp-bar { height: 6px; border-radius: 3px; background: var(--surface-2); margin: 8px 0 6px; overflow: hidden; }
+.cmp-bar i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, #2f7bff, #19c3ff); }
+.cmp-meta { display: flex; justify-content: space-between; font-size: var(--f-tiny); color: var(--muted); }
 
 /* steps ring card -------------------------------------------- */
 .steps-card { display: flex; align-items: center; gap: var(--s4); }
@@ -404,11 +418,17 @@ button.daycell:active { transform: scale(.95); }
 .wk-actions .row .btn { flex: 1; }
 /* per-set logging */
 .setlog { display: flex; flex-direction: column; gap: 6px; }
-.setlog .setrow { display: grid; grid-template-columns: 44px 1fr 1fr; gap: var(--s3); align-items: center; }
+.setlog .setrow { display: grid; grid-template-columns: 44px 1fr 1fr 26px; gap: var(--s3); align-items: center; }
 .setlog .setrow.head { font-size: var(--f-tiny); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; padding: 0 2px 2px; }
 .setlog .setrow.head span:first-child { text-align: center; }
-.setlog .setn { text-align: center; font-weight: 800; color: var(--accent-2); font-size: var(--f-small); }
+.setlog .setn { text-align: center; font-weight: 800; color: var(--accent-2); font-size: var(--f-small); position: relative; }
+.setlog .setn .setx-tag { position: absolute; top: -4px; right: 2px; font-style: normal; font-size: 8px; color: var(--good); }
 .setlog input.setfld { margin: 0; text-align: center; }
+.setlog .setrm { background: none; border: 0; color: var(--faint); font-size: 13px; cursor: pointer; padding: 4px; min-height: 30px; }
+.setlog .setrm:active { color: var(--danger, #ff4d57); }
+.setlog .setrm-sp { width: 26px; }
+.addset { margin-top: 4px; background: none; border: 1px dashed var(--line); color: var(--muted); border-radius: var(--r-sm); padding: 8px; font-size: var(--f-small); font-weight: 600; cursor: pointer; width: 100%; }
+.addset:active { background: var(--surface-2); }
 /* preview (before a workout is started) */
 .wk-preview-label { font-size: var(--f-tiny); text-transform: uppercase; letter-spacing: .08em; margin: 6px 0 10px; }
 .ex.locked { opacity: .72; }
@@ -627,3 +647,11 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: var(--s5) 0; }
   main { padding: 0 !important; }
   .muted, .faint { color: #444 !important; }
 }
+
+/* one-time bodyweight hint inside an exercise card */
+.bw-hint { background: linear-gradient(180deg, rgba(47,123,255,.10), rgba(25,195,255,.06)); border: 1px solid rgba(47,123,255,.28); border-radius: var(--r-sm); padding: 10px 12px; margin: 0 0 12px; font-size: var(--f-small); color: var(--text); }
+.bw-hint span { display: block; line-height: 1.4; color: var(--muted); }
+.bw-hint b { color: var(--text); }
+.bw-hint-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.bw-hint-x { margin-left: auto; background: none; border: 0; color: var(--faint); font-size: var(--f-small); cursor: pointer; padding: 6px 4px; }
+.bw-hint-x:active { color: var(--text); }
