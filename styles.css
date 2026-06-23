@@ -280,7 +280,9 @@ button.link:active { opacity: .6; }
 .cmp-lvl.lvl4 { background: linear-gradient(90deg, #2f7bff, #19c3ff); color: #061018; }
 .cmp-bar { height: 6px; border-radius: 3px; background: var(--surface-2); margin: 8px 0 6px; overflow: hidden; }
 .cmp-bar i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, #2f7bff, #19c3ff); }
-.cmp-meta { display: flex; justify-content: space-between; font-size: var(--f-tiny); color: var(--muted); }
+.cmp-meta { display: flex; justify-content: space-between; gap: 8px; font-size: var(--f-tiny); color: var(--muted); flex-wrap: wrap; }
+.cmp-meta b { color: var(--text); font-weight: 800; }
+.cmp-tag { font-style: normal; font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--faint); border: 1px solid var(--line); border-radius: 5px; padding: 1px 4px; margin-left: 4px; vertical-align: middle; }
 
 /* steps ring card -------------------------------------------- */
 .steps-card { display: flex; align-items: center; gap: var(--s4); }
@@ -655,3 +657,40 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: var(--s5) 0; }
 .bw-hint-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 .bw-hint-x { margin-left: auto; background: none; border: 0; color: var(--faint); font-size: var(--f-small); cursor: pointer; padding: 6px 4px; }
 .bw-hint-x:active { color: var(--text); }
+
+/* ---- workout summary overlay ---- */
+#summary { position: fixed; inset: 0; z-index: 96; display: none; place-items: center; background: rgba(0,0,0,.82); backdrop-filter: blur(8px); padding: 20px; }
+#summary.show { display: grid; animation: viewIn .3s var(--ease); }
+.sum-card { text-align: center; max-width: 360px; width: 100%; }
+.sum-emoji { font-size: 46px; line-height: 1; }
+.sum-eyebrow { font-size: var(--f-tiny); letter-spacing: .2em; text-transform: uppercase; color: var(--accent-2); font-weight: 800; margin-top: 10px; }
+.sum-day { font-size: 24px; font-weight: 900; margin: 3px 0 18px; }
+.sum-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.sum-stat { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-md); padding: 13px 6px; }
+.sum-stat b { display: block; font-size: 20px; font-weight: 900; color: var(--text); line-height: 1.1; }
+.sum-stat b i { font-style: normal; font-size: 11px; font-weight: 700; color: var(--muted); margin-left: 2px; }
+.sum-stat span { display: block; font-size: var(--f-tiny); color: var(--muted); margin-top: 4px; }
+.sum-pr { margin-top: 14px; background: linear-gradient(90deg, rgba(255,176,32,.16), rgba(255,176,32,.05)); border: 1px solid rgba(255,176,32,.35); color: #ffd27a; border-radius: var(--r-sm); padding: 10px; font-size: var(--f-small); font-weight: 700; }
+
+/* ---- plate calculator ---- */
+.pl-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.pl-lab { width: 86px; font-weight: 700; font-size: var(--f-small); color: var(--muted); }
+.pl-lab span { color: var(--faint); font-weight: 600; }
+.pl-row .fld { margin: 0; flex: 1; }
+.pl-bars { display: flex; gap: 6px; }
+.pl-bar { background: var(--surface-2); border: 1px solid var(--line); color: var(--muted); border-radius: var(--r-sm); padding: 8px 12px; font-weight: 700; cursor: pointer; }
+.pl-bar.on { background: rgba(47,123,255,.18); border-color: var(--accent); color: var(--text); }
+.pl-out { margin-top: 4px; }
+.pl-hint { color: var(--muted); font-size: var(--f-small); margin: 6px 0 0; }
+.pl-side-lab { font-size: var(--f-tiny); text-transform: uppercase; letter-spacing: .08em; color: var(--faint); margin: 14px 0 6px; }
+.pl-plates { display: flex; flex-wrap: wrap; gap: 6px; }
+.pl-plate { background: rgba(25,195,255,.14); border: 1px solid rgba(25,195,255,.3); color: #19c3ff; border-radius: 999px; padding: 5px 11px; font-weight: 800; font-size: var(--f-small); }
+.pl-justbar { color: var(--muted); font-size: var(--f-small); }
+.pl-warn { margin-top: 12px; font-size: var(--f-tiny); color: #ffb020; }
+.pl-warn b { color: #ffd27a; }
+.pl-barbell { display: flex; align-items: center; gap: 3px; min-height: 78px; padding: 6px 0; overflow-x: auto; }
+.pl-bar-mid { flex: 0 0 22px; height: 6px; background: linear-gradient(90deg,#3a4150,#5b6573); border-radius: 3px; }
+.pl-disc { flex: 0 0 auto; width: 13px; border-radius: 3px; background: linear-gradient(180deg,#2f7bff,#19c3ff); display: grid; place-items: center; }
+.pl-disc i { font-style: normal; font-size: 8px; font-weight: 800; color: #061018; transform: rotate(-90deg); white-space: nowrap; }
+.pl-disc.pl-xl { height: 72px; } .pl-disc.pl-lg { height: 60px; } .pl-disc.pl-md { height: 48px; } .pl-disc.pl-sm { height: 36px; } .pl-disc.pl-xs { height: 26px; width: 11px; }
+.pl-collar { flex: 0 0 10px; height: 16px; background: #5b6573; border-radius: 2px; margin-left: 2px; }

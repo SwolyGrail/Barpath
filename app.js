@@ -47,7 +47,7 @@
       xp: 0, badges: {}, streak: 0, lastWorkoutDate: null, freezes: 0,
       history: [], programsTried: {}, prs: {}, steps: {}, stepGoal: 8000,
       progress: {}, claimedChallenges: {}, swaps: {}, unit: "kg", customLifts: [],
-      xpLog: {}, exerciseHistory: {}, autoRest: true, dayMods: {}, tutorialSeen: false,
+      xpLog: {}, exerciseHistory: {}, autoRest: true, haptics: true, dayMods: {}, tutorialSeen: false,
       customPrograms: {}, customExercises: [], bwHintDismissed: false,
       profile: { sex: null, age: null, height: null, weight: null }
     };
@@ -74,6 +74,7 @@
     if (!s.xpLog || typeof s.xpLog !== "object") s.xpLog = {};
     if (!s.exerciseHistory || typeof s.exerciseHistory !== "object") s.exerciseHistory = {};
     if (typeof s.autoRest !== "boolean") s.autoRest = true;
+    if (typeof s.haptics !== "boolean") s.haptics = true;
     if (!s.dayMods || typeof s.dayMods !== "object") s.dayMods = {};
     if (typeof s.tutorialSeen !== "boolean") s.tutorialSeen = false;
     if (typeof s.bwHintDismissed !== "boolean") s.bwHintDismissed = false;
@@ -971,12 +972,12 @@
     return '<section class="view">' +
       '<div class="section-head"><h2 class="h1">Today</h2><span class="muted" style="font-size:var(--f-small)">' + new Date().toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }) + '</span></div>' +
       todayCard +
+      '<div class="section-head"><h2>This week</h2></div>' +
+      weekRow +
       statusCard +
       achLine +
       '<div class="section-head"><h2>Your program</h2><span><button class="link" data-editdays>Edit days</button><span class="muted" style="margin:0 7px">·</span><button class="link" data-tab-link="programs">Switch</button></span></div>' +
       banner +
-      '<div class="section-head"><h2>This week</h2></div>' +
-      weekRow +
       '<div class="section-head"><h2>Weekly challenge</h2></div>' +
       challenge +
       '<div class="section-head"><h2>Movement</h2></div>' +
@@ -1238,6 +1239,7 @@
     if (r.optionCount > 1) tools += '<button class="btn ghost sm" data-swap="' + sid + '">' + ICON("swap") + ' Swap</button>';
     if (r.type === "main" && r.pr) tools += '<button class="btn ghost sm" data-savepr="' + sid + '">🥇 Save PR</button>';
     tools += '<button class="btn ghost sm" data-rest="' + sid + '">' + ICON("timer") + ' Rest</button>';
+    tools += '<button class="btn ghost sm" data-plates="' + sid + '">🍩 Plates</button>';
     tools += '<button class="btn ghost sm" data-skip="' + sid + '">🚫 Skip</button></div>';
 
     return '<div class="ex' + (done ? " done" : "") + (entry.open ? " open" : "") + '" data-ex="' + sid + '">' + top +
@@ -1264,15 +1266,17 @@
   }
   /* ---- per-exercise history (powers "last time" + trends) ---- */
   function repsNum(repsStr) { var m = ("" + (repsStr || "")).match(/\d+/); return m ? parseInt(m[0], 10) : null; }
-  /* ---- body profile + strength standards (vs general population) ---- */
-  // bodyweight-multiple thresholds per lift: [novice, intermediate, advanced, elite]
-  var STD_M = { bench: [0.75, 1.0, 1.5, 2.0], squat: [1.0, 1.25, 1.75, 2.25], deadlift: [1.25, 1.5, 2.0, 2.5], ohp: [0.5, 0.7, 0.9, 1.1], row: [0.75, 1.0, 1.25, 1.5] };
-  var STD_F = { bench: [0.4, 0.6, 0.9, 1.2], squat: [0.6, 0.9, 1.3, 1.7], deadlift: [0.75, 1.1, 1.5, 2.0], ohp: [0.3, 0.45, 0.65, 0.85], row: [0.4, 0.6, 0.8, 1.05] };
+  /* ---- body profile + strength standards ---- */
+  // estimated-1RM / bodyweight cutoffs per lift: [beginner, novice, intermediate, advanced, elite]
+  var STD_M = { bench: [0.50, 0.80, 1.20, 1.60, 2.00], squat: [0.75, 1.20, 1.60, 2.15, 2.65], deadlift: [1.00, 1.50, 2.00, 2.50, 3.00], ohp: [0.35, 0.55, 0.80, 1.00, 1.20], row: [0.50, 0.75, 1.05, 1.35, 1.60] };
+  var STD_F = { bench: [0.30, 0.45, 0.70, 0.95, 1.20], squat: [0.50, 0.80, 1.20, 1.60, 2.00], deadlift: [0.60, 1.00, 1.40, 1.85, 2.30], ohp: [0.20, 0.33, 0.50, 0.65, 0.85], row: [0.30, 0.45, 0.65, 0.85, 1.05] };
   var STD_LIFTS = [{ id: "bench", name: "Bench Press" }, { id: "squat", name: "Back Squat" }, { id: "deadlift", name: "Deadlift" }, { id: "ohp", name: "Overhead Press" }, { id: "row", name: "Barbell Row" }];
-  var STD_LEVELS = [
-    { name: "Beginner", pct: 10 }, { name: "Novice", pct: 30 }, { name: "Intermediate", pct: 55 },
-    { name: "Advanced", pct: 80 }, { name: "Elite", pct: 95 }
-  ];
+  var STD_TIERS = ["Beginner", "Novice", "Intermediate", "Advanced", "Elite"];
+  var STD_LP = [5, 20, 50, 80, 95];               // lifter percentile at each cutoff
+  // lifter-percentile -> percentile vs all adults (only ~15-20% strength-train)
+  var STD_GEN = [[0, 15], [5, 55], [20, 70], [50, 85], [80, 95], [95, 98.5], [100, 99.5]];
+  // age -> fraction of peak strength (peak ~20-30, then declining), linear interpolated
+  var STD_AGE = [[30, 1.00], [35, 0.975], [40, 0.95], [45, 0.92], [50, 0.89], [55, 0.855], [60, 0.82], [65, 0.775], [70, 0.73], [75, 0.68], [80, 0.63], [85, 0.58], [90, 0.53]];
   function toKg(v) { return S.unit === "lb" ? v * 0.453592 : v; }
   function profileBodyKg() { var p = S.profile || {}; return (p.weight > 0) ? p.weight : null; }
   function hasProfile() { var p = S.profile || {}; return !!(p.weight > 0); }
@@ -1280,16 +1284,43 @@
   var _bwNames = null;
   var _bwHintUsed = false;
   function isBwName(name) { if (!_bwNames) { _bwNames = {}; (D.EXERCISE_LIBRARY || []).forEach(function (e) { if (e.bw) _bwNames[e.name] = true; }); } return !!_bwNames[name]; }
-  // returns {ratio, levelIdx, level, pct} for a lift id, or null if no PR/bodyweight
+  function lerpPts(x, pts) {
+    if (x <= pts[0][0]) return pts[0][1];
+    if (x >= pts[pts.length - 1][0]) return pts[pts.length - 1][1];
+    for (var i = 0; i < pts.length - 1; i++) {
+      var a = pts[i], b = pts[i + 1];
+      if (x >= a[0] && x <= b[0]) return a[1] + (b[1] - a[1]) * (x - a[0]) / (b[0] - a[0]);
+    }
+    return x;
+  }
+  function lerp(x, a, b, c, d) { return b === a ? c : c + (d - c) * (x - a) / (b - a); }
+  function peakFrac(age) { age = parseFloat(age); if (!(age > 30)) return 1.0; return lerpPts(age, STD_AGE); }
+  function epley1RM(w, reps) { reps = parseInt(reps, 10); if (!reps || reps <= 1) return w; return w * (1 + Math.min(reps, 12) / 30); }
+  function lifterPct(eff, c) {
+    if (eff <= c[0]) return Math.max(1, lerp(eff, 0, c[0], 0, 5));
+    if (eff >= c[4]) return Math.min(99, lerp(eff, c[4], c[4] * 1.15, 95, 99));
+    for (var i = 0; i < 4; i++) if (eff >= c[i] && eff <= c[i + 1]) return lerp(eff, c[i], c[i + 1], STD_LP[i], STD_LP[i + 1]);
+    return 50;
+  }
+  function tierIdxFor(eff, c) { if (eff >= c[4]) return 4; if (eff >= c[3]) return 3; if (eff >= c[2]) return 2; if (eff >= c[1]) return 1; return 0; }
+  // rich comparison object for a lift id, or null if no real PR / incomplete profile
   function strengthLevel(liftId) {
     var bw = profileBodyKg(); if (!bw) return null;
+    var p = S.profile || {}; if (!p.sex) return null;
     var pr = S.prs && S.prs[liftId];
     if (!pr || pr.seeded || !(pr.value > 0)) return null;
-    var ratio = toKg(pr.value) / bw;
-    var tbl = (S.profile.sex === "female") ? STD_F : STD_M;
-    var th = tbl[liftId]; if (!th) return null;
-    var idx = 0; for (var i = 0; i < th.length; i++) if (ratio >= th[i]) idx = i + 1;
-    return { ratio: ratio, levelIdx: idx, level: STD_LEVELS[idx].name, pct: STD_LEVELS[idx].pct };
+    var c = (p.sex === "female" ? STD_F : STD_M)[liftId]; if (!c) return null;
+    var est = epley1RM(toKg(pr.value), pr.reps);   // estimated 1RM (kg)
+    var ratio = est / bw;                           // true ratio actually lifted
+    var fr = peakFrac(p.age);
+    var eff = ratio / fr;                           // age-normalized for comparison
+    var lp = lifterPct(eff, c);
+    var ti = tierIdxFor(eff, c);
+    return {
+      ratio: ratio, tier: STD_TIERS[ti], levelIdx: ti,
+      pct: Math.round(lerpPts(lp, STD_GEN)), lifterPct: Math.round(lp),
+      aged: fr < 0.999, estimated: parseInt(pr.reps, 10) > 1
+    };
   }
   function sessionVolume(dayIdx) {
     var ds = dayState(dayIdx), total = 0;
@@ -1444,6 +1475,7 @@
     $$("[data-rest]").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); openTimer(); }; });
     $$("[data-unskip]").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); unskipExercise(b.dataset.unskip); }; });
     $$("[data-skip]").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); skipExercise(b.dataset.skip); }; });
+    $$("[data-plates]").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); var top = bestSet(ensureEntry(b.dataset.plates)); openPlateCalc(top && top.w ? top.w : null); }; });
     $$('.ex-body input, .ex-body textarea, .ex-body select, .ex-tools').forEach(function (el) {
       el.addEventListener('click', function (e) { e.stopPropagation(); });
     });
@@ -1506,7 +1538,7 @@
   function toggleDone(sid) {
     var e = ensureEntry(sid);
     e.done = !e.done;
-    if (e.done) { awardXp(D.XP.set, false); maybeRestPrompt(); }
+    if (e.done) { awardXp(D.XP.set, false); haptic("tap"); maybeRestPrompt(); }
     save();
     var card = $('.ex[data-ex="' + sid + '"]'); if (card) card.classList.toggle("done", e.done);
     updateWkProgress();
@@ -1571,6 +1603,7 @@
     if (firstEver) earn("first-pr");
     checkBadges();
     save(); burst();
+    haptic("pr");
     toast("🥇", "New PR: " + r.name + " " + val + " " + unitLabel() + "!");
     renderChrome();
   }
@@ -1658,10 +1691,9 @@
     if (hr >= 21) earn("night-owl");
     if (gap >= 7) earn("comeback");
     checkBadges();
-    save(); burst();
-    var vol = sessionVolume(workoutDayIdx);
-    toast("✅", vol > 0 ? "Logged · " + vol.toLocaleString() + " " + unitLabel() + " volume · +" + D.XP.workout + " XP" : "Workout logged. +" + D.XP.workout + " XP");
-    go("home");
+    var summary = sessionSummary(workoutDayIdx);
+    save(); burst(); haptic("finish");
+    showSummary(summary);
   }
   function resetDay() {
     openConfirm("Reset this day?", "Clears the checkmarks and entries you logged for this session.", "Reset", function () {
@@ -2177,22 +2209,26 @@
       '</section>';
   }
   function strengthCompareCard() {
-    if (!hasProfile()) {
+    var p = S.profile || {};
+    if (!hasProfile() || !p.sex) {
       return '<div class="section-head"><h2>How you compare</h2></div>' +
-        '<div class="card"><p class="muted" style="font-size:var(--f-small);margin:0 0 12px">Add your sex, height, weight and age to see how your lifts stack up against the general population — a bit of fun on top of your numbers.</p>' +
+        '<div class="card"><p class="muted" style="font-size:var(--f-small);margin:0 0 12px">Add your sex, age, height and weight to see how your lifts stack up against the general adult population — a bit of fun on top of your numbers.</p>' +
         '<button class="btn ghost sm" id="addProfileStats">Add your details</button></div>';
     }
     var rows = STD_LIFTS.map(function (l) {
       var r = strengthLevel(l.id);
       if (!r) return '<div class="cmp-row"><div class="cmp-top"><span class="cmp-name">' + esc(l.name) + '</span><span class="muted" style="font-size:var(--f-tiny)">Log a PR to compare</span></div></div>';
+      var estTag = r.estimated ? ' <i class="cmp-tag">est. 1RM</i>' : '';
+      var ageTag = r.aged ? ' <i class="cmp-tag">age-adj</i>' : '';
       return '<div class="cmp-row"><div class="cmp-top"><span class="cmp-name">' + esc(l.name) + '</span>' +
-        '<span class="cmp-lvl lvl' + r.levelIdx + '">' + r.level + '</span></div>' +
+        '<span class="cmp-lvl lvl' + r.levelIdx + '">' + r.tier + '</span></div>' +
         '<div class="cmp-bar"><i style="width:' + r.pct + '%"></i></div>' +
-        '<div class="cmp-meta"><span>' + r.ratio.toFixed(2) + '× bodyweight</span><span>stronger than ~' + r.pct + '%</span></div></div>';
+        '<div class="cmp-meta"><span>' + r.ratio.toFixed(2) + '× bodyweight' + estTag + '</span>' +
+        '<span><b>Stronger than ~' + r.pct + '%</b> of adults' + ageTag + '</span></div></div>';
     }).join("");
     return '<div class="section-head"><h2>How you compare</h2></div>' +
       '<div class="card">' + rows +
-      '<p class="muted" style="font-size:var(--f-tiny);margin:10px 0 0">Estimates from bodyweight-relative strength standards for your sex — just for fun, not medical or coaching advice.</p></div>';
+      '<p class="muted" style="font-size:var(--f-tiny);margin:10px 0 0">Compared with adults your age &amp; sex — and most people don\u2019t strength-train, so even a beginner ranks high. The tier (Beginner\u2013Elite) is measured against people who lift. A fun estimate, not coaching advice.</p></div>';
   }
   function profileCard() {
     var p = S.profile || {};
@@ -2312,7 +2348,11 @@
       '<button class="' + (S.unit === "lb" ? "on" : "") + '" data-gunit="lb">Pounds (lb)</button></div>' +
       '<div class="setting-row" style="margin-top:16px"><div><div style="font-weight:600">Auto rest timer</div>' +
       '<div class="muted" style="font-size:var(--f-small)">Start a rest countdown when you complete an exercise.</div></div>' +
-      '<button class="toggle' + (S.autoRest ? " on" : "") + '" id="autoRestToggle" role="switch" aria-checked="' + (S.autoRest ? "true" : "false") + '"><span class="knob"></span></button></div></div>' +
+      '<button class="toggle' + (S.autoRest ? " on" : "") + '" id="autoRestToggle" role="switch" aria-checked="' + (S.autoRest ? "true" : "false") + '"><span class="knob"></span></button></div>' +
+      '<div class="setting-row" style="margin-top:16px"><div><div style="font-weight:600">Haptic feedback</div>' +
+      '<div class="muted" style="font-size:var(--f-small)">Subtle vibrations when you complete a set, hit a PR, or finish.</div></div>' +
+      '<button class="toggle' + (S.haptics ? " on" : "") + '" id="hapticToggle" role="switch" aria-checked="' + (S.haptics ? "true" : "false") + '"><span class="knob"></span></button></div>' +
+      '<button class="btn ghost sm" id="openPlateCalc" style="margin-top:16px">🍩 Plate calculator</button></div>' +
       '<div class="section-head"><h2>Your details</h2></div>' +
       profileCard() +
       '<div class="section-head"><h2>Your data</h2></div>' +
@@ -2332,7 +2372,9 @@
     $$("[data-prlift]").forEach(function (b) { b.onclick = function () { openPrManage(b.dataset.prlift); }; });
     $$("[data-histidx]").forEach(function (b) { b.onclick = function () { openWorkoutEntry(+b.dataset.histidx); }; });
     $$("[data-gunit]").forEach(function (b) { b.onclick = function () { S.unit = b.dataset.gunit; save(); render(); toast("⚖️", "Units set to " + unitLabel()); }; });
-    var art = $("#autoRestToggle"); if (art) art.onclick = function () { S.autoRest = !S.autoRest; save(); render(); toast(S.autoRest ? "⏱️" : "⏱️", "Auto rest timer " + (S.autoRest ? "on" : "off")); };
+    var art = $("#autoRestToggle"); if (art) art.onclick = function () { S.autoRest = !S.autoRest; save(); render(); toast("⏱️", "Auto rest timer " + (S.autoRest ? "on" : "off")); };
+    var hpt = $("#hapticToggle"); if (hpt) hpt.onclick = function () { S.haptics = !S.haptics; save(); render(); if (S.haptics) haptic("tap"); toast("📳", "Haptics " + (S.haptics ? "on" : "off")); };
+    var pc = $("#openPlateCalc"); if (pc) pc.onclick = function () { openPlateCalc(null); };
     var ep = $("#editProfile"); if (ep) ep.onclick = openProfileEditor;
     var rt = $("#replayTutorial"); if (rt) rt.onclick = function () { openTutorial(0, true); };
     $$("[data-badge]").forEach(function (b) { b.onclick = function () { openBadgeInfo(b.dataset.badge); }; });
@@ -2381,6 +2423,7 @@
     earn("first-pr");
     checkBadges();
     save(); burst();
+    haptic("pr");
     toast("🥇", "New PR: " + nm + " " + val + " " + unitLabel() + "!");
     render();
   }
@@ -2623,6 +2666,7 @@
       '<p class="muted">You leveled up. Keep the bar moving.</p>' +
       '<button class="btn primary mt4" id="luClose">Continue</button></div>';
     $("#levelup").classList.add("show");
+    haptic("level");
     $("#luClose").onclick = closeLevelUp;
     setTimeout(function () { var c = $("#luClose"); if (c) c.focus(); }, 50);
     _luKey = function (e) { if (e.key === "Escape" || e.key === "Enter") { e.preventDefault(); closeLevelUp(); } };
@@ -2747,6 +2791,122 @@
     var txt = "I'm on Barpath 💪 Level " + li.lv + " " + li.title + ", " + S.history.length + " workouts, " + S.streak + "-day streak. Attack the Bar. Own the Path.";
     if (navigator.share) { navigator.share({ title: "Barpath", text: txt }).catch(function () {}); }
     else if (navigator.clipboard) { navigator.clipboard.writeText(txt).then(function () { toast("📋", "Progress copied to clipboard"); }, function () { toast("📋", txt); }); }
+    else toast("💪", txt);
+  }
+
+  /* ============================================================
+     haptics · plate calculator · workout summary
+     ============================================================ */
+  function haptic(kind) {
+    if (!S.haptics || !navigator.vibrate) return;
+    var pat = kind === "pr" ? [0, 25, 45, 30]
+      : kind === "finish" ? [0, 35, 55, 35, 55, 45]
+      : kind === "level" ? [0, 20, 30, 20, 30, 25] : 12;
+    try { navigator.vibrate(pat); } catch (e) {}
+  }
+
+  var PLATES_KG = [25, 20, 15, 10, 5, 2.5, 1.25], PLATES_LB = [45, 35, 25, 10, 5, 2.5];
+  var BARS_KG = [20, 15, 10], BARS_LB = [45, 35, 15];
+  var _plBar = null, _plTarget = null;
+  function plDiscClass(w) { return w >= 20 ? "xl" : w >= 15 ? "lg" : w >= 10 ? "md" : w >= 5 ? "sm" : "xs"; }
+  function platePlan(target, bar, unit) {
+    var plates = unit === "lb" ? PLATES_LB : PLATES_KG;
+    var perSide = (target - bar) / 2;
+    if (perSide < 0) return { perSide: [], loadable: 0, leftover: 0, negative: true };
+    var out = [], rem = perSide;
+    plates.forEach(function (p) {
+      var n = Math.floor((rem + 1e-9) / p);
+      if (n > 0) { out.push({ w: p, n: n }); rem -= n * p; }
+    });
+    rem = Math.round(rem * 100) / 100;
+    return { perSide: out, loadable: bar + 2 * (perSide - rem), leftover: rem, negative: false };
+  }
+  function openPlateCalc(prefill) {
+    var unit = unitLabel();
+    if (prefill != null) _plTarget = prefill;
+    var bars = (S.unit === "lb" ? BARS_LB : BARS_KG);
+    if (_plBar == null || bars.indexOf(_plBar) < 0) _plBar = bars[0];
+    var target = _plTarget != null ? _plTarget : "";
+    openSheet(
+      '<div class="grip"></div><h3>Plate calculator</h3>' +
+      '<div class="pl-row"><label class="pl-lab" for="plTarget">Target <span>(' + unit + ')</span></label>' +
+      '<input class="fld" id="plTarget" inputmode="decimal" value="' + esc(target) + '" placeholder="e.g. 100" /></div>' +
+      '<div class="pl-row"><label class="pl-lab">Bar</label><div class="pl-bars" id="plBars">' +
+      bars.map(function (b) { return '<button class="pl-bar' + (b === _plBar ? " on" : "") + '" data-plbar="' + b + '">' + b + '</button>'; }).join("") + '</div></div>' +
+      '<div id="plOut" class="pl-out"></div>'
+    );
+    function recompute() {
+      var t = parseFloat($("#plTarget").value), out = $("#plOut");
+      _plTarget = ($("#plTarget").value || "").trim();
+      if (!(t > 0)) { out.innerHTML = '<p class="pl-hint">Enter a target weight to see the plates to load on each side.</p>'; return; }
+      var plan = platePlan(t, _plBar, S.unit);
+      if (plan.negative) { out.innerHTML = '<p class="pl-hint">That target is below the bar itself (' + _plBar + " " + unit + ').</p>'; return; }
+      var discs = "";
+      plan.perSide.forEach(function (x) { for (var i = 0; i < x.n && i < 12; i++) discs += '<span class="pl-disc pl-' + plDiscClass(x.w) + '"><i>' + x.w + '</i></span>'; });
+      var pills = plan.perSide.length
+        ? plan.perSide.map(function (x) { return '<span class="pl-plate">' + (x.n > 1 ? x.n + "× " : "") + x.w + '</span>'; }).join("")
+        : '<span class="pl-justbar">Just the bar</span>';
+      var warn = plan.leftover > 0
+        ? '<div class="pl-warn">Closest loadable: <b>' + fmtNum(plan.loadable) + " " + unit + '</b> · ' + plan.leftover + " " + unit + '/side short of exact</div>' : '';
+      out.innerHTML =
+        '<div class="pl-barbell"><span class="pl-bar-mid"></span>' + discs + '<span class="pl-collar"></span></div>' +
+        '<div class="pl-side-lab">Each side</div><div class="pl-plates">' + pills + '</div>' + warn;
+    }
+    $("#plTarget").oninput = recompute;
+    $$("#plBars [data-plbar]").forEach(function (b) {
+      b.onclick = function () { _plBar = parseFloat(b.dataset.plbar); $$("#plBars .pl-bar").forEach(function (x) { x.classList.remove("on"); }); b.classList.add("on"); recompute(); };
+    });
+    recompute();
+    setTimeout(function () { var i = $("#plTarget"); if (i && !target) i.focus(); }, 60);
+  }
+
+  function sessionSummary(dayIdx) {
+    var ds = dayState(dayIdx), sets = 0, exs = 0;
+    daySlots(dayIdx).forEach(function (o) {
+      if (o.slot.t === "warmup") return;
+      var e = ds.entries[o.sid]; if (!e || e.skipped) return;
+      if (e.done) exs++;
+      setsFor(e).forEach(function (s) { if (parseFloat(s.w) > 0 || parseInt(s.r, 10) > 0) sets++; });
+    });
+    var today = todayYmd();
+    var prs = Object.keys(S.prs).filter(function (k) { var p = S.prs[k]; return p && !p.seeded && p.date === today; }).length;
+    var mins = 0; if (ds.startedAt) { mins = Math.round((Date.now() - new Date(ds.startedAt).getTime()) / 60000); if (mins < 1 || mins > 600) mins = 0; }
+    var xp = D.XP.workout + sets * D.XP.set + prs * D.XP.pr;
+    return { vol: sessionVolume(dayIdx), sets: sets, exercises: exs, prs: prs, mins: mins, xp: xp, dayName: (activeProgramObj()[dayIdx] || {}).name || "Workout" };
+  }
+  var _sumKey = null;
+  function showSummary(s) {
+    function stat(v, l) { return '<div class="sum-stat"><b>' + v + '</b><span>' + l + '</span></div>'; }
+    var grid = stat(fmtNum(s.vol) + '<i>' + unitLabel() + '</i>', "Volume") +
+      stat(s.sets, "Sets") + stat(s.exercises, "Exercises") +
+      (s.mins ? stat(s.mins + '<i>min</i>', "Time") : "") +
+      stat('+' + fmtNum(s.xp), "XP earned") +
+      stat(s.prs, s.prs === 1 ? "PR" : "PRs");
+    $("#summary").innerHTML = '<div class="sum-card">' +
+      '<div class="sum-emoji">💪</div>' +
+      '<div class="sum-eyebrow">Session complete</div>' +
+      '<div class="sum-day">' + esc(s.dayName) + '</div>' +
+      '<div class="sum-grid">' + grid + '</div>' +
+      (s.prs > 0 ? '<div class="sum-pr">🥇 ' + s.prs + ' new ' + (s.prs === 1 ? "PR" : "PRs") + ' this session!</div>' : '') +
+      '<button class="btn primary mt4" id="sumDone">Done</button>' +
+      '<button class="btn ghost mt2" id="sumShare">Share result</button></div>';
+    $("#summary").classList.add("show");
+    $("#sumDone").onclick = closeSummary;
+    $("#sumShare").onclick = function () { shareSession(s); };
+    setTimeout(function () { var d = $("#sumDone"); if (d) d.focus(); }, 50);
+    _sumKey = function (e) { if (e.key === "Escape" || e.key === "Enter") { e.preventDefault(); closeSummary(); } };
+    document.addEventListener("keydown", _sumKey, true);
+  }
+  function closeSummary() {
+    $("#summary").classList.remove("show");
+    if (_sumKey) { document.removeEventListener("keydown", _sumKey, true); _sumKey = null; }
+    go("home");
+  }
+  function shareSession(s) {
+    var txt = "Barpath 💪 " + s.dayName + " done — " + fmtNum(s.vol) + " " + unitLabel() + " volume, " + s.sets + " sets" +
+      (s.prs ? ", " + s.prs + " PR" + (s.prs > 1 ? "s" : "") : "") + ". Attack the Bar. Own the Path.";
+    if (navigator.share) { navigator.share({ title: "Barpath", text: txt }).catch(function () {}); }
+    else if (navigator.clipboard) { navigator.clipboard.writeText(txt).then(function () { toast("📋", "Summary copied"); }, function () { toast("📋", txt); }); }
     else toast("💪", txt);
   }
 

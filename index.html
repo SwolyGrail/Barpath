@@ -17,9 +17,37 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Barpath" />
 
+<style id="splash-css">
+  #splash{position:fixed;inset:0;z-index:99999;background:radial-gradient(120% 90% at 50% 38%,#0d1320 0%,#000 70%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;transition:opacity .55s ease}
+  #splash.hide{opacity:0;pointer-events:none}
+  #splash .sp-logo{width:112px;height:112px;filter:drop-shadow(0 8px 34px rgba(47,123,255,.4))}
+  #splash .sp-word{font:800 30px/1 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;letter-spacing:.2em;text-transform:uppercase;background:linear-gradient(90deg,#2f7bff,#19c3ff);-webkit-background-clip:text;background-clip:text;color:transparent;opacity:0;transform:translateY(8px);animation:spWord .55s ease .55s forwards}
+  #splash .sp-slogan{font:600 12px/1 system-ui,-apple-system,sans-serif;letter-spacing:.09em;color:#7a8290;opacity:0;animation:spWord .55s ease .85s forwards}
+  #splash .sp-path{stroke-dasharray:620;stroke-dashoffset:620;animation:spDraw 1.05s cubic-bezier(.6,.05,.25,1) .15s forwards}
+  #splash .sp-plate{opacity:0;animation:spPlate .5s ease .95s forwards}
+  @keyframes spDraw{to{stroke-dashoffset:0}}
+  @keyframes spWord{to{opacity:1;transform:none}}
+  @keyframes spPlate{to{opacity:1}}
+  @media (prefers-reduced-motion: reduce){
+    #splash .sp-path{animation:none;stroke-dashoffset:0}
+    #splash .sp-word,#splash .sp-slogan,#splash .sp-plate{animation:none;opacity:1;transform:none}
+  }
+</style>
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+
+<!-- Brand splash (covers app until ready; auto-dismisses) -->
+<div id="splash" role="img" aria-label="Barpath">
+  <svg class="sp-logo" viewBox="0 0 512 512" fill="none" aria-hidden="true">
+    <path class="sp-path" d="M232 100 C 360 156 360 214 256 256 C 152 298 152 358 282 414" stroke="url(#spg)" stroke-width="36" stroke-linecap="round"/>
+    <g class="sp-plate"><circle cx="330" cy="178" r="50" fill="#05070b"/><circle cx="330" cy="178" r="50" fill="none" stroke="url(#spg)" stroke-width="17"/><circle cx="330" cy="178" r="15" fill="none" stroke="url(#spg)" stroke-width="11"/></g>
+    <g class="sp-plate"><circle cx="182" cy="336" r="50" fill="#05070b"/><circle cx="182" cy="336" r="50" fill="none" stroke="url(#spg)" stroke-width="17"/><circle cx="182" cy="336" r="15" fill="none" stroke="url(#spg)" stroke-width="11"/></g>
+    <defs><linearGradient id="spg" x1="120" y1="80" x2="392" y2="432" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#2f7bff"/><stop offset="1" stop-color="#19c3ff"/></linearGradient></defs>
+  </svg>
+  <div class="sp-word">Barpath</div>
+  <div class="sp-slogan">Attack the Bar. Own the Path.</div>
+</div>
 
 <!-- Shared SVG gradient definitions referenced by styles.css (rings + muscle avatars) -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
@@ -105,6 +133,7 @@
 <div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
 <div id="toasts" aria-live="polite"></div>
 <div id="levelup" role="dialog" aria-modal="true"></div>
+<div id="summary" role="dialog" aria-modal="true" aria-label="Workout summary"></div>
 <div id="tutorial" role="dialog" aria-modal="true" aria-label="How Barpath works"></div>
 <canvas id="confetti"></canvas>
 
@@ -145,6 +174,26 @@
       "userAgent: " + navigator.userAgent +
       '</pre></div>';
   }, 1600);
+</script>
+<script>
+  /* Dismiss the brand splash: wait for app boot, but keep a short minimum
+     on-screen time so it reads as intentional, and never get stuck. */
+  (function () {
+    var s = document.getElementById("splash"); if (!s) return;
+    var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var MIN = reduce ? 450 : 1350, MAX = 4000, start = Date.now(), done = false;
+    function hide() {
+      if (done) return; done = true;
+      s.classList.add("hide");
+      setTimeout(function () { if (s && s.parentNode) s.parentNode.removeChild(s); }, 600);
+    }
+    function ready() { setTimeout(hide, Math.max(0, MIN - (Date.now() - start))); }
+    s.addEventListener("click", hide); // tap to skip
+    (function poll() {
+      if (window.__BARPATH_BOOTED__ || Date.now() - start > MAX) return ready();
+      setTimeout(poll, 60);
+    })();
+  })();
 </script>
 </body>
 </html>
